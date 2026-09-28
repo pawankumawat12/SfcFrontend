@@ -382,6 +382,10 @@ export default function Orders() {
         store_owner_phone: (o as any).store_owner_phone,
         store_latitude: (o as any).store_latitude,
         store_longitude: (o as any).store_longitude,
+        is_forwarded_to_store: Boolean((o as any).is_forwarded_to_store),
+        admin_address: (o as any).admin_address,
+        admin_phone: (o as any).admin_phone,
+        admin_email: (o as any).admin_email,
         items: (o.items || []).map((it) => ({
           id: it.id,
           name: it.product_name,
@@ -789,17 +793,25 @@ export default function Orders() {
                       {(() => {
                         const s = String(order.status || "").toLowerCase().trim();
                         const isAccepted = ["accepted", "preparing", "out for delivery", "delivered", "completed"].includes(s);
-                        const storeName = order.store_name || "Main SFC Bakery";
+                        const isForwarded = Boolean(order.is_forwarded_to_store);
+                        const storeName = isForwarded
+                          ? (order.store_name || "Assigned Branch")
+                          : "Main Bakery (Admin)";
 
-                        return isAccepted ? (
+                        return isAccepted && isForwarded ? (
                           <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 font-bold text-emerald-800 border border-emerald-200">
                             <Store size={12} className="text-emerald-600 shrink-0" />
-                            <span>Accepted by: {storeName}</span>
+                            <span>Branch: {storeName}</span>
+                          </span>
+                        ) : isForwarded ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 font-medium text-blue-700 border border-blue-200">
+                            <Store size={12} className="text-blue-500 shrink-0" />
+                            <span>Dispatched to: {storeName}</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-2 py-0.5 font-medium text-stone-600 border border-stone-200">
-                            <Store size={12} className="text-stone-500 shrink-0" />
-                            <span>Fulfillment: {storeName}</span>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 font-medium text-amber-800 border border-amber-200">
+                            <Store size={12} className="text-amber-600 shrink-0" />
+                            <span>Main Bakery (Admin)</span>
                           </span>
                         );
                       })()}

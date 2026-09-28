@@ -7,6 +7,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/redux/store";
 import toast from "react-hot-toast";
 import { toAssetUrl, getApiUrl } from "@/utils/backendUrl";
+import { useGetFooterQuery } from "@/redux/services/settingsApi";
 import {
   X,
   MapPin,
@@ -220,24 +221,26 @@ export default function OrderDetailsModal({
     return 1;
   };
 
+  const { data: footerResponse } = useGetFooterQuery();
+  const adminFooter = footerResponse?.data;
+
   const currentStep = getActiveStepIndex();
-  const isAccepted = currentStep >= 2;
+  const isForwardedToStore = Boolean(order.is_forwarded_to_store);
+  const isAccepted = isForwardedToStore && currentStep >= 2;
 
-  const storeName =
-    order.store_name ||
-    order.storeName ||
-    (order.store_id ? `Branch #${order.store_id}` : "Main SFC Bakery & Kitchen");
+  // When order is NOT dispatched to a store yet, show Admin / Main Bakery details.
+  // Once dispatched to a store, show the assigned store's details.
+  const storeName = isForwardedToStore
+    ? (order.store_name || order.storeName || (order.store_id ? `Branch #${order.store_id}` : "Assigned Branch"))
+    : "Main Bakery & Kitchen (Admin)";
 
-  const storeAddress =
-    order.store_address ||
-    order.storeAddress ||
-    "Central Kitchen / Main Bakery";
+  const storeAddress = isForwardedToStore
+    ? (order.store_address || order.storeAddress || "Branch Address")
+    : (order.admin_address || adminFooter?.location || "SFC Bakers Central Kitchen & Main Bakery");
 
-  const storePhone =
-    order.store_phone ||
-    order.storePhone ||
-    order.store_owner_phone ||
-    "";
+  const storePhone = isForwardedToStore
+    ? (order.store_phone || order.storePhone || order.store_owner_phone || "")
+    : (order.admin_phone || adminFooter?.phone_number || "");
 
   return (
     <div
@@ -439,6 +442,20 @@ export default function OrderDetailsModal({
                     </p>
                   </div>
                 </div>
+              ) : isForwardedToStore ? (
+                <div className="mt-4 flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50/90 p-3.5 text-left shadow-xs">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs">
+                    <Clock3 size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-black text-blue-950">
+                      Dispatched to Branch • Awaiting Store Confirmation
+                    </p>
+                    <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
+                      Your order has been forwarded to <strong>{storeName}</strong>. As soon as the branch reviews and accepts your order, complete store contact information and live preparation status will be unlocked here.
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/90 p-3.5 text-left shadow-xs">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-xs">
@@ -446,10 +463,10 @@ export default function OrderDetailsModal({
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-black text-amber-950">
-                      Order Placed • Waiting for Store Acceptance
+                      Order Placed • Processing at Central Kitchen (Admin)
                     </p>
                     <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                      Your order has been sent to <strong>{storeName}</strong>. As soon as the branch reviews and accepts your order, complete store contact information and live preparation status will be unlocked here.
+                      Your order has been received by our <strong>Main Bakery & Central Kitchen</strong>. Once dispatched to the nearest branch, you will see the branch details and live kitchen updates here.
                     </p>
                   </div>
                 </div>
@@ -457,16 +474,20 @@ export default function OrderDetailsModal({
             </div>
           )}
 
-          {/* Fulfillment Branch Information Card */}
+          {/* Fulfillment Location / Branch Information Card */}
           <div className="rounded-2xl border border-[var(--color-border)] bg-white p-4 sm:p-5 shadow-xs">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--color-border)]">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--color-primary-50)] text-[var(--color-primary)]">
+                <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                  isForwardedToStore
+                    ? "bg-[var(--color-primary-50)] text-[var(--color-primary)]"
+                    : "bg-amber-50 text-amber-700"
+                }`}>
                   <Store size={18} />
                 </div>
                 <div>
                   <h3 className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">
-                    Fulfillment Branch
+                    {isForwardedToStore ? "Fulfillment Branch" : "Processing Location (Admin)"}
                   </h3>
                   <p className="text-sm font-black text-[var(--color-text-primary)]">
                     {storeName}
@@ -474,54 +495,84 @@ export default function OrderDetailsModal({
                 </div>
               </div>
 
-              {isAccepted ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-                  <CheckCircle2 size={11} /> Accepted
-                </span>
+              {isForwardedToStore ? (
+                isAccepted ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
+                    <CheckCircle2 size={11} /> Store Accepted
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-1 text-[10px] font-bold text-blue-700">
+                    <Clock3 size={11} /> Dispatched to Store
+                  </span>
+                )
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1 text-[10px] font-bold text-amber-700">
-                  <Clock3 size={11} /> Awaiting Acceptance
+                  <Clock3 size={11} /> Main Bakery (Admin)
                 </span>
               )}
             </div>
 
             <div className="mt-3.5 space-y-3 text-xs">
-              {/* Branch Address */}
+              {/* Address */}
               <div className="flex items-start gap-2.5">
                 <MapPin size={15} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
                 <div>
-                  <span className="font-bold text-[var(--color-text-primary)]">Branch Address: </span>
+                  <span className="font-bold text-[var(--color-text-primary)]">
+                    {isForwardedToStore ? "Branch Address: " : "Admin / Main Bakery Address: "}
+                  </span>
                   <span className="text-[var(--color-text-secondary)]">
                     {storeAddress}
                   </span>
                 </div>
               </div>
 
-              {/* Branch Contact Number & Call Store Button */}
+              {/* Contact Number & Call Store Button */}
               <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-stone-100">
                 <div className="flex items-center gap-2.5">
                   <Phone size={15} className="text-[var(--color-primary)] shrink-0" />
                   <div>
-                    <span className="font-bold text-[var(--color-text-primary)]">Store Contact: </span>
-                    {isAccepted ? (
+                    <span className="font-bold text-[var(--color-text-primary)]">
+                      {isForwardedToStore ? "Store Contact: " : "Admin Support Contact: "}
+                    </span>
+                    {isForwardedToStore ? (
+                      isAccepted ? (
+                        <span className="font-semibold text-[var(--color-text-primary)]">
+                          {storePhone || "Available via Support Chat"}
+                        </span>
+                      ) : (
+                        <span className="text-stone-400 italic">
+                          Contact details unlock once order is accepted
+                        </span>
+                      )
+                    ) : storePhone ? (
                       <span className="font-semibold text-[var(--color-text-primary)]">
-                        {storePhone || "Available via Support Chat"}
+                        {storePhone}
                       </span>
                     ) : (
                       <span className="text-stone-400 italic">
-                        Contact details unlock once order is accepted
+                        SFC Bakery Central Support
                       </span>
                     )}
                   </div>
                 </div>
 
-                {isAccepted && storePhone ? (
+                {isForwardedToStore ? (
+                  isAccepted && storePhone ? (
+                    <a
+                      href={`tel:${storePhone}`}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 text-xs font-bold shadow-xs transition active:scale-95"
+                    >
+                      <Phone size={12} />
+                      Call Branch
+                    </a>
+                  ) : null
+                ) : storePhone ? (
                   <a
                     href={`tel:${storePhone}`}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 text-xs font-bold shadow-xs transition active:scale-95"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark,#3f6412)] text-white px-3.5 py-1.5 text-xs font-bold shadow-xs transition active:scale-95"
                   >
                     <Phone size={12} />
-                    Call Branch
+                    Call Helpline
                   </a>
                 ) : null}
               </div>
@@ -783,7 +834,13 @@ export default function OrderDetailsModal({
                   }`}
                 >
                   <MessageCircle size={14} />
-                  <span>{isChatExpired ? "Chat Closed" : "Chat with Store"}</span>
+                  <span>
+                    {isChatExpired
+                      ? "Chat Closed"
+                      : isForwardedToStore
+                      ? "Chat with Store"
+                      : "Chat with Support"}
+                  </span>
                 </button>
               );
             })()}
