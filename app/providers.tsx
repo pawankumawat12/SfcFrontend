@@ -76,25 +76,6 @@ function AuthLoader({ children }: { children: React.ReactNode }) {
 }
 
 export default function Providers({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    // Silently pre-warm critical pages in background for offline viewing
-    if (typeof window !== "undefined" && "caches" in window && navigator.onLine) {
-      const criticalPages = ["/", "/menu", "/offline"];
-      caches
-        .open("pages-cache")
-        .then((cache) => {
-          criticalPages.forEach((url) => {
-            fetch(url, { cache: "no-cache" })
-              .then((res) => {
-                if (res.ok) cache.put(url, res);
-              })
-              .catch(() => {});
-          });
-        })
-        .catch(() => {});
-    }
-  }, []);
-
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>

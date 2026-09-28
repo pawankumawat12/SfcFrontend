@@ -20,21 +20,6 @@ html {
   overflow-x: hidden;
 }
 
-html.offline-active,
-body.offline-active {
-  overflow: hidden !important;
-  height: 100% !important;
-  max-height: 100dvh !important;
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
-}
-
-html.offline-active::-webkit-scrollbar,
-body.offline-active::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
 
 p, h1, h2, h3, h4, h5, h6, span, a, label, li, td, th {
   overflow-wrap: break-word;
