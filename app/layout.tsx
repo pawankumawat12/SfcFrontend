@@ -7,7 +7,6 @@ import "../styles/global.css";
 import Providers from "./providers";
 import CustomToaster from "@/components/CustomToaster";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
-import GlobalNetworkWatcher from "@/components/GlobalNetworkWatcher";
 import WhatsAppChatButton from "@/components/WhatsAppChatButton";
 import { getSiteUrl } from "@/utils/backendUrl";
 
@@ -102,7 +101,6 @@ export default function RootLayout({
           <WhatsAppChatButton />
           <Footer />
           <PWAInstallPrompt />
-          <GlobalNetworkWatcher />
         </Providers>
       </body>
     </html>
