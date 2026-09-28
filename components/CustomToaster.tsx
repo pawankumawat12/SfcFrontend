@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Toaster, ToastBar, toast } from "react-hot-toast";
 import { X } from "lucide-react";
@@ -12,6 +12,8 @@ export default function CustomToaster() {
       containerStyle={{
         top: 24,
         right: 20,
+        zIndex: 999999999,
+        pointerEvents: "auto",
       }}
       toastOptions={{
         duration: 1500,
