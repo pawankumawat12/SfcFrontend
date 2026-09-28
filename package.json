@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build --webpack",
-    "start": "next start",
+    "dev": "bash -c 'if [ -d \"$HOME/.nvm/versions/node/v20.20.2/bin\" ]; then export PATH=\"$HOME/.nvm/versions/node/v20.20.2/bin:$PATH\"; elif [ -d \"$HOME/.nvm/versions/node/v22.23.0/bin\" ]; then export PATH=\"$HOME/.nvm/versions/node/v22.23.0/bin:$PATH\"; fi; exec next dev'",
+    "build": "bash -c 'if [ -d \"$HOME/.nvm/versions/node/v20.20.2/bin\" ]; then export PATH=\"$HOME/.nvm/versions/node/v20.20.2/bin:$PATH\"; elif [ -d \"$HOME/.nvm/versions/node/v22.23.0/bin\" ]; then export PATH=\"$HOME/.nvm/versions/node/v22.23.0/bin:$PATH\"; fi; exec next build --webpack'",
+    "start": "bash -c 'if [ -d \"$HOME/.nvm/versions/node/v20.20.2/bin\" ]; then export PATH=\"$HOME/.nvm/versions/node/v20.20.2/bin:$PATH\"; elif [ -d \"$HOME/.nvm/versions/node/v22.23.0/bin\" ]; then export PATH=\"$HOME/.nvm/versions/node/v22.23.0/bin:$PATH\"; fi; exec next start'",
     "lint": "eslint"
   },
   "dependencies": {

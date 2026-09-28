@@ -3,14 +3,21 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
   dest: "public",
-  disable: process.env.NODE_ENV === "development",
+  disable:
+    process.env.NODE_ENV === "development" &&
+    process.env.ENABLE_PWA_DEV !== "true",
   register: true,
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+  extendDefaultRuntimeCaching: true,
   fallbacks: {
     document: "/offline",
   },
   workboxOptions: {
     skipWaiting: true,
     clientsClaim: true,
+    navigateFallback: "/offline",
+    navigateFallbackDenylist: [/^\/api\//, /^\/_next\//],
     runtimeCaching: [
       // 1. Google Fonts
       {
@@ -38,7 +45,8 @@ const withPWA = withPWAInit({
       },
       // 3. Public catalog, CMS, and settings APIs (NetworkFirst -> Cache fallback when offline)
       {
-        urlPattern: /\/api\/v1\/(?:categories|products|hero-sliders|settings|offers|cms|reviews).*/i,
+        urlPattern:
+          /\/api\/v1\/(?:categories|products|hero-sliders|settings|offers|cms|reviews).*/i,
         handler: "NetworkFirst",
         options: {
           cacheName: "api-cache",
