@@ -17,6 +17,10 @@ export interface DeliveryLocation {
   storeName: string;
   isSet: boolean;
   distanceKm?: number | null;
+  canDeliver?: boolean;
+  outOfDeliveryZone?: boolean;
+  deliveryWarning?: string | null;
+  maxDeliveryRadius?: number | null;
 }
 
 const STORAGE_KEY = "sfc_delivery_location";

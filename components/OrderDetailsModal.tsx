@@ -8,6 +8,7 @@ import { RootState } from "@/redux/store";
 import toast from "react-hot-toast";
 import { toAssetUrl, getApiUrl } from "@/utils/backendUrl";
 import { useGetFooterQuery } from "@/redux/services/settingsApi";
+import { useCancelOrderMutation } from "@/redux/services/orderApi";
 import {
   X,
   MapPin,
@@ -129,6 +130,73 @@ export default function OrderDetailsModal({
 }: OrderDetailsModalProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const accessToken = useSelector((state: RootState) => state.auth?.accessToken);
+
+  // Cancellation Grace Window State (120-second / 2-minute buffer)
+  const [cancelOrderMutation, { isLoading: isCancelling }] = useCancelOrderMutation();
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("Ordered by mistake");
+  const [customReason, setCustomReason] = useState("");
+
+  const cancelableStatuses = ["Pending", "Order Placed", "Pending Payment"];
+  const isStatusCancelable = cancelableStatuses.includes(order?.status);
+
+  const getInitialRemainingSeconds = () => {
+    if (!isStatusCancelable) return 0;
+    if (order?.cancellation?.remainingSeconds != null) {
+      return Number(order.cancellation.remainingSeconds);
+    }
+    if (!order?.created_at) return 0;
+    const createdAtMs = new Date(order.created_at).getTime();
+    const elapsedSec = Math.floor((Date.now() - createdAtMs) / 1000);
+    return Math.max(0, 120 - elapsedSec);
+  };
+
+  const [remainingCancelSec, setRemainingCancelSec] = useState<number>(getInitialRemainingSeconds);
+
+  useEffect(() => {
+    setRemainingCancelSec(getInitialRemainingSeconds());
+    if (!isStatusCancelable) return;
+
+    const interval = setInterval(() => {
+      setRemainingCancelSec((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [order?.id, order?.status, order?.created_at]);
+
+  const formatTimer = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const handleConfirmCancel = async () => {
+    const finalReason =
+      cancelReason === "Other"
+        ? customReason.trim() || "Customer requested cancellation"
+        : cancelReason;
+
+    const orderDbId = order?.dbId || order?.id;
+    if (!orderDbId) return;
+
+    try {
+      const res = await cancelOrderMutation({
+        orderId: Number(orderDbId),
+        cancelReason: finalReason,
+      }).unwrap();
+      toast.success(res?.message || "Order cancelled successfully!");
+      setShowCancelModal(false);
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || "Could not cancel order");
+    }
+  };
 
   // Close on Escape key press
   useEffect(() => {
@@ -315,6 +383,8 @@ export default function OrderDetailsModal({
 
         {/* Modal Body - Scrollable */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+          {/* Cancellation Window Active Banner */}
+      
           {/* Order Progress Tracker */}
           {isCancelled ? (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
@@ -784,6 +854,36 @@ export default function OrderDetailsModal({
               )}
             </div>
           </div>
+          {isStatusCancelable && !isCancelled && (
+            <div className="rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-200 text-amber-900 shrink-0">
+                  <Clock3 size={16} className="animate-spin text-amber-800" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-950 flex items-center gap-1.5 flex-wrap">
+                    <span>Order Cancellation Available</span>
+                    {remainingCancelSec > 0 && (
+                      <span className="rounded-md bg-amber-200 px-1.5 py-0.5 text-[10px] font-black text-amber-900">
+                        {formatTimer(remainingCancelSec)} quick buffer
+                      </span>
+                    )}
+                  </h4>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    You can cancel without penalty anytime before the kitchen accepts and starts preparing your order.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(true)}
+                className="rounded-xl bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer ml-auto"
+              >
+                Cancel Order
+              </button>
+            </div>
+          )}
+
         </div>
 
         {/* Modal Footer Actions */}
@@ -845,13 +945,9 @@ export default function OrderDetailsModal({
               );
             })()}
 
-            <Link
-              href="/menu"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-white px-3.5 py-2 text-xs font-bold text-[var(--color-text-primary)] hover:bg-stone-100 transition"
-            >
-              <RotateCcw size={14} />
-              <span>Order Again</span>
-            </Link>
+            
+
+       
 
             <button
               type="button"
@@ -873,6 +969,97 @@ export default function OrderDetailsModal({
           </button>
         </div>
       </div>
+
+      {/* Cancellation Confirmation Dialog */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 sm:p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2 text-red-600 font-bold text-base">
+                <AlertCircle size={20} />
+                <span>Cancel Order #{order.order_number || order.id}?</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                className="text-stone-400 hover:text-stone-700 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs text-stone-600 leading-relaxed">
+              Are you sure you want to cancel? If you paid online, a full refund will be automatically processed back to your original payment method.
+            </p>
+
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-stone-700 mb-2">
+                Reason for cancellation:
+              </label>
+              <div className="space-y-2">
+                {[
+                  "Ordered by mistake",
+                  "Incorrect delivery address",
+                  "Need to change items / quantity",
+                  "Taking too long / Changed my mind",
+                  "Other",
+                ].map((reason) => (
+                  <label
+                    key={reason}
+                    className="flex items-center gap-2.5 rounded-xl border border-stone-200 p-2.5 text-xs text-stone-800 cursor-pointer hover:bg-stone-50 transition"
+                  >
+                    <input
+                      type="radio"
+                      name="cancelReason"
+                      value={reason}
+                      checked={cancelReason === reason}
+                      onChange={() => setCancelReason(reason)}
+                      className="accent-[var(--color-primary)]"
+                    />
+                    <span>{reason}</span>
+                  </label>
+                ))}
+              </div>
+
+              {cancelReason === "Other" && (
+                <textarea
+                  value={customReason}
+                  onChange={(e) => setCustomReason(e.target.value)}
+                  placeholder="Please describe why you are cancelling..."
+                  rows={2}
+                  className="mt-2 w-full rounded-xl border border-stone-300 p-2.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
+                />
+              )}
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2.5 pt-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                disabled={isCancelling}
+                className="rounded-xl border border-stone-300 px-4 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 cursor-pointer"
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancel}
+                disabled={isCancelling}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                {isCancelling ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Cancelling...</span>
+                  </>
+                ) : (
+                  <span>Confirm Cancellation</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

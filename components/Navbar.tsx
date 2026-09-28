@@ -25,6 +25,7 @@ import {
   Star,
   Truck,
   MapPin,
+  AlertTriangle,
 } from "lucide-react";
 
 import { useGetCartQuery } from "../redux/services/cartApi";
@@ -372,6 +373,19 @@ const Navbar = () => {
             <span>{closedBannerMessage}</span>
           </div>
         )}
+        {deliveryLoc?.outOfDeliveryZone && !isStoreClosed && (
+          <div className="bg-amber-500 text-stone-950 text-xs font-bold py-1.5 px-4 text-center flex items-center justify-center gap-2 shadow-xs">
+            <AlertTriangle size={15} className="shrink-0 text-stone-950" />
+            <span>Currently, we deliver within 10 km of our branch. Your address is outside our delivery zone.</span>
+            <button
+              type="button"
+              onClick={() => setLocationModalOpen(true)}
+              className="underline font-black hover:text-white ml-1 cursor-pointer"
+            >
+              Change Location
+            </button>
+          </div>
+        )}
         <div className="border-b border-[var(--color-border)] bg-[var(--bg-surface)]/95 backdrop-blur-xl shadow-[0_4px_25px_rgba(45,27,15,0.08)]">
           <div className="mx-auto flex h-[82px] max-w-7xl items-center justify-between gap-8 px-6 lg:px-8">
             {/* ---------------- LOGO ---------------- */}
@@ -402,15 +416,35 @@ const Navbar = () => {
             <button
               type="button"
               onClick={() => setLocationModalOpen(true)}
-              className="group hidden md:flex items-center gap-2.5 rounded-2xl border border-[var(--color-border)] bg-[var(--bg-surface)] px-3 py-1.5 text-left transition hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-50)] shadow-2xs cursor-pointer max-w-[220px]"
-              title="Change Delivery Location"
+              className={`group hidden md:flex items-center gap-2.5 rounded-2xl border px-3 py-1.5 text-left transition shadow-2xs cursor-pointer max-w-[260px] ${
+                deliveryLoc?.outOfDeliveryZone
+                  ? "border-amber-400 bg-amber-50/90 hover:bg-amber-100"
+                  : "border-[var(--color-border)] bg-[var(--bg-surface)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-50)]"
+              }`}
+              title={
+                deliveryLoc?.outOfDeliveryZone
+                  ? deliveryLoc.deliveryWarning || "Currently, we deliver within 10 km of our branch"
+                  : "Change Delivery Location"
+              }
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-50)] text-[var(--color-primary)] group-hover:bg-[var(--color-primary)] group-hover:text-white transition shadow-2xs">
-                <MapPin size={16} />
+              <div
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition shadow-2xs ${
+                  deliveryLoc?.outOfDeliveryZone
+                    ? "bg-amber-200 text-amber-900 group-hover:bg-amber-300"
+                    : "bg-[var(--color-primary-50)] text-[var(--color-primary)] group-hover:bg-[var(--color-primary)] group-hover:text-white"
+                }`}
+              >
+                {deliveryLoc?.outOfDeliveryZone ? (
+                  <AlertTriangle size={16} className="text-amber-800 animate-pulse" />
+                ) : (
+                  <MapPin size={16} />
+                )}
               </div>
               <div className="min-w-0 flex-1 leading-tight">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                  Delivering to
+                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider">
+                  <span className={deliveryLoc?.outOfDeliveryZone ? "text-amber-800" : "text-stone-400"}>
+                    {deliveryLoc?.outOfDeliveryZone ? "Outside 10 km Zone" : "Delivering to"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1 text-xs font-bold text-[var(--color-text-primary)]">
                   <span className="truncate">
@@ -421,6 +455,11 @@ const Navbar = () => {
                     className="shrink-0 text-stone-400 group-hover:text-stone-700"
                   />
                 </div>
+                {deliveryLoc?.outOfDeliveryZone && (
+                  <div className="text-[10px] font-semibold text-amber-800 truncate leading-none mt-0.5">
+                    We deliver within 10 km
+                  </div>
+                )}
               </div>
             </button>
 
@@ -960,18 +999,39 @@ const Navbar = () => {
             onClick={() => setLocationModalOpen(true)}
             role="button"
             tabIndex={0}
-            className="flex items-center justify-between border-t border-[var(--color-border)]/60 bg-[var(--color-primary-50)]/50 px-4 py-1.5 text-xs cursor-pointer transition hover:bg-[var(--color-primary-50)]"
+            className={`flex items-center justify-between border-t px-4 py-1.5 text-xs cursor-pointer transition ${
+              deliveryLoc?.outOfDeliveryZone
+                ? "border-amber-300 bg-amber-100/90 hover:bg-amber-200"
+                : "border-[var(--color-border)]/60 bg-[var(--color-primary-50)]/50 hover:bg-[var(--color-primary-50)]"
+            }`}
           >
             <div className="flex items-center gap-1.5 min-w-0">
-              <MapPin size={13} className="text-[var(--color-primary)] shrink-0" />
+              {deliveryLoc?.outOfDeliveryZone ? (
+                <AlertTriangle size={13} className="text-amber-800 shrink-0 animate-pulse" />
+              ) : (
+                <MapPin size={13} className="text-[var(--color-primary)] shrink-0" />
+              )}
               <span className="text-[11px] font-medium text-stone-700 truncate">
-                Deliver to:{" "}
-                <span className="font-bold text-[var(--color-text-primary)] underline decoration-dotted">
-                  {deliveryLoc?.shortAddress || "Select delivery location"}
-                </span>
+                {deliveryLoc?.outOfDeliveryZone ? (
+                  <span className="text-amber-900 font-bold">
+                    ⚠️ Outside 10 km:{" "}
+                    <span className="underline decoration-dotted">{deliveryLoc?.shortAddress}</span>
+                  </span>
+                ) : (
+                  <>
+                    Deliver to:{" "}
+                    <span className="font-bold text-[var(--color-text-primary)] underline decoration-dotted">
+                      {deliveryLoc?.shortAddress || "Select delivery location"}
+                    </span>
+                  </>
+                )}
               </span>
             </div>
-            <span className="text-[10px] font-bold text-[var(--color-primary)] shrink-0 flex items-center gap-0.5 ml-2">
+            <span
+              className={`text-[10px] font-bold shrink-0 flex items-center gap-0.5 ml-2 ${
+                deliveryLoc?.outOfDeliveryZone ? "text-amber-900" : "text-[var(--color-primary)]"
+              }`}
+            >
               Change <ChevronDown size={11} />
             </span>
           </div>

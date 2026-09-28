@@ -18,6 +18,8 @@ import {
   Gift,
   Leaf,
   Zap,
+  Search,
+  X,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
@@ -56,6 +58,43 @@ function formatRupee(v: number) {
   return Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 }
 
+export function getProductDietaryType(product: any): "veg" | "eggless" | "non-veg" {
+  if (product?.dietary_type) {
+    const dt = String(product.dietary_type).toLowerCase();
+    if (dt.includes("eggless")) return "eggless";
+    if (dt.includes("non") || dt.includes("meat") || dt.includes("chicken")) return "non-veg";
+    if (dt.includes("veg")) return "veg";
+  }
+
+  if (product?.is_veg === false) return "non-veg";
+
+  const text = `${product?.name || ""} ${product?.description || ""} ${product?.category_name || ""}`.toLowerCase();
+
+  if (
+    text.includes("chicken") ||
+    text.includes("mutton") ||
+    text.includes("fish") ||
+    text.includes("prawn") ||
+    text.includes("meat") ||
+    text.includes("egg wrap") ||
+    text.includes("egg roll") ||
+    text.includes("non-veg") ||
+    text.includes("non veg")
+  ) {
+    return "non-veg";
+  }
+
+  if (
+    text.includes("eggless") ||
+    text.includes("egg-less") ||
+    text.includes("pure veg cake")
+  ) {
+    return "eggless";
+  }
+
+  return "veg";
+}
+
 const EMPTY_CATEGORIES: never[] = [];
 const EMPTY_PRODUCTS: never[] = [];
 
@@ -66,6 +105,10 @@ export default function Menu() {
   const searchParams = useSearchParams();
   const urlStoreId = searchParams?.get("store_id") || searchParams?.get("storeId");
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
+
+  // Search and Dietary filter states
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [dietaryFilter, setDietaryFilter] = useState<"all" | "veg" | "eggless" | "non-veg">("all");
 
   useEffect(() => {
     if (urlStoreId) {
@@ -274,8 +317,33 @@ export default function Menu() {
 
   const gridRef = useRef<HTMLDivElement | null>(null);
 
-  // Products are already filtered by category in the API request above.
-  const visibleProducts = products;
+  // Filter products by category, search query, and dietary preference
+  const visibleProducts = useMemo(() => {
+    return products.filter((p: any) => {
+      // 1. Dietary filter
+      if (dietaryFilter !== "all") {
+        const itemType = getProductDietaryType(p);
+        if (dietaryFilter === "veg") {
+          if (itemType === "non-veg") return false;
+        } else if (dietaryFilter === "eggless") {
+          if (itemType !== "eggless") return false;
+        } else if (dietaryFilter === "non-veg") {
+          if (itemType !== "non-veg") return false;
+        }
+      }
+
+      // 2. Search query filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const nameMatch = (p.name || "").toLowerCase().includes(q);
+        const descMatch = (p.description || "").toLowerCase().includes(q);
+        const catMatch = (p.category_name || p.categoryName || "").toLowerCase().includes(q);
+        if (!nameMatch && !descMatch && !catMatch) return false;
+      }
+
+      return true;
+    });
+  }, [products, dietaryFilter, searchQuery]);
 
   // pagination via infinite scroll
   const totalPages = Math.max(
@@ -283,7 +351,9 @@ export default function Menu() {
     Math.ceil(visibleProducts.length / pageSize)
   );
 
-  useEffect(() => setPage(1), [selected]);
+  useEffect(() => {
+    setPage(1);
+  }, [selected, searchQuery, dietaryFilter]);
 
   useEffect(() => {
     const cat = searchParams?.get("category");
@@ -477,6 +547,74 @@ export default function Menu() {
         "
       >
         <div className="mx-auto max-w-7xl px-4 md:px-8">
+          {/* Top Bar: Live Search & Dietary Filters */}
+          <div className="pt-3.5 pb-2 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 border-b border-[var(--color-border)]/50">
+            {/* Live Search Bar */}
+            <div className="relative flex-1 max-w-lg">
+              <Search
+                size={17}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search cakes, burgers, pizzas, snacks, pastries..."
+                className="w-full h-10 pl-10 pr-9 rounded-2xl border border-[var(--color-border)] bg-[var(--bg-surface)] text-xs sm:text-sm font-medium text-[var(--color-text-primary)] placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/15 shadow-2xs transition"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+
+            {/* Dietary Filter Controls */}
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+              {[
+                { id: "all", label: "All Items" },
+                { id: "veg", label: "Pure Veg", isVeg: true },
+                { id: "eggless", label: "Eggless", isEggless: true },
+                { id: "non-veg", label: "Non-Veg", isNonVeg: true },
+              ].map((diet) => {
+                const active = dietaryFilter === diet.id;
+                return (
+                  <button
+                    key={diet.id}
+                    type="button"
+                    onClick={() => setDietaryFilter(diet.id as any)}
+                    className={`inline-flex items-center gap-1.5 h-8.5 shrink-0 rounded-full px-3 text-xs font-bold transition active:scale-95 cursor-pointer ${
+                      active
+                        ? "bg-stone-900 text-white shadow-xs"
+                        : "border border-[var(--color-border)] bg-[var(--bg-surface)] text-stone-600 hover:border-stone-400 hover:text-stone-900"
+                    }`}
+                  >
+                    {diet.isVeg && (
+                      <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs border border-emerald-600 p-[1.5px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                      </span>
+                    )}
+                    {diet.isEggless && (
+                      <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs border border-amber-500 p-[1.5px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      </span>
+                    )}
+                    {diet.isNonVeg && (
+                      <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs border border-rose-600 p-[1.5px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                      </span>
+                    )}
+                    <span>{diet.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div
             className="
@@ -751,15 +889,31 @@ export default function Menu() {
           ) : visibleProducts.length === 0 ? (
             <div className="my-6 flex flex-col items-center justify-center rounded-3xl border border-[var(--color-border)] bg-[var(--bg-surface)] px-4 py-16 text-center shadow-xs">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-primary-50)] text-[var(--color-primary)]">
-                <ShoppingBag size={28} />
+                {searchQuery || dietaryFilter !== "all" ? <Search size={28} /> : <ShoppingBag size={28} />}
               </div>
               <h3 className="text-lg font-black text-[var(--color-text-primary)]">
-                No items in this category yet
+                {searchQuery || dietaryFilter !== "all" ? "No matching items found" : "No items in this category yet"}
               </h3>
               <p className="mt-1 max-w-sm text-xs text-[var(--color-text-muted)]">
-                We are freshly baking and preparing delicious treats. Please choose another category or check back soon!
+                {searchQuery
+                  ? `No dishes found matching "${searchQuery}". Try searching another name or reset filters.`
+                  : dietaryFilter !== "all"
+                  ? `No ${dietaryFilter} items found in this section. Please try selecting All Items.`
+                  : "We are freshly baking and preparing delicious treats. Please choose another category or check back soon!"}
               </p>
-              {selected !== "all" && (
+              {(searchQuery || dietaryFilter !== "all") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setDietaryFilter("all");
+                  }}
+                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[var(--color-primary-dark)] cursor-pointer"
+                >
+                  Reset Search & Filters <ArrowRight size={14} />
+                </button>
+              )}
+              {selected !== "all" && !searchQuery && dietaryFilter === "all" && (
                 <button
                   type="button"
                   onClick={() => setSelected("all")}
@@ -980,21 +1134,45 @@ export default function Menu() {
                         href={`/product/${p.id}`}
                         className="block"
                       >
-                        <h3
-                          className="
-                            line-clamp-1
-                            text-xs
-                            font-black
-                            text-[var(--color-text-primary)]
-                            transition-colors
-                            group-hover:text-[var(--color-primary)]
-                            sm:text-base
-                            break-words
-                          "
-                          title={p.name}
-                        >
-                          {p.name}
-                        </h3>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {(() => {
+                            const dietary = getProductDietaryType(p);
+                            if (dietary === "veg") {
+                              return (
+                                <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-xs border border-emerald-600 p-[1.5px]" title="Vegetarian">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                                </span>
+                              );
+                            }
+                            if (dietary === "eggless") {
+                              return (
+                                <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-xs border border-amber-500 p-[1.5px]" title="Eggless Bakery">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-xs border border-rose-600 p-[1.5px]" title="Non-Vegetarian">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                              </span>
+                            );
+                          })()}
+                          <h3
+                            className="
+                              line-clamp-1
+                              text-xs
+                              font-black
+                              text-[var(--color-text-primary)]
+                              transition-colors
+                              group-hover:text-[var(--color-primary)]
+                              sm:text-base
+                              break-words
+                            "
+                            title={p.name}
+                          >
+                            {p.name}
+                          </h3>
+                        </div>
 
                         <p
                           className="

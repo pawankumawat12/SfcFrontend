@@ -194,12 +194,15 @@ export default function SelectLocationModal({
       const store = res?.store;
       const isBranch = res?.storeType === "branch" && store?.id;
 
-      if (res?.can_deliver === false || (res as any)?.outOfDeliveryZone) {
-        toast.error(
-          res?.message || "Sorry, this location is outside our delivery zone. Please choose a nearby delivery address.",
+      const isOutOfDeliveryZone = Boolean(
+        res?.can_deliver === false || (res as any)?.outOfDeliveryZone
+      );
+
+      if (isOutOfDeliveryZone) {
+        toast(
+          res?.message || "Currently, we deliver within 10 km of our branch. This address is outside our delivery zone.",
           { duration: 5500, icon: "⚠️" }
         );
-        return;
       }
 
       // 2. Build human-readable address
@@ -283,6 +286,12 @@ export default function SelectLocationModal({
         storeName: store?.name || "Main Bakery",
         isSet: true,
         distanceKm: res?.distanceKm != null ? Number(res.distanceKm) : null,
+        canDeliver: !isOutOfDeliveryZone,
+        outOfDeliveryZone: isOutOfDeliveryZone,
+        deliveryWarning: isOutOfDeliveryZone
+          ? res?.message || "Currently, we deliver within 10 km of our branch."
+          : null,
+        maxDeliveryRadius: (res as any)?.max_delivery_distance || 10,
       };
 
       setStoredDeliveryLocation(newDeliveryLocation);

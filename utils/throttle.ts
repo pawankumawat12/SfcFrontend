@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 
 export function throttle<T extends (...args: any[]) => any>(
   fn: T,
@@ -21,7 +21,11 @@ export function useThrottledCallback<T extends (...args: any[]) => any>(
 ): (...args: Parameters<T>) => void {
   const lastCallRef = useRef<number>(0);
   const callbackRef = useRef<T>(callback);
-  callbackRef.current = callback;
+
+  // React 19 safe: update ref in effect rather than render body
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
 
   return useCallback(
     (...args: Parameters<T>) => {

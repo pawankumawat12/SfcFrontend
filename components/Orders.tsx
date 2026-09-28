@@ -18,6 +18,9 @@ import {
   Eye,
   CreditCard,
   Store,
+  AlertCircle,
+  X,
+  Loader2,
 } from "lucide-react";
 import OrderChat from "./OrderChat";
 import OrderDetailsModal from "./OrderDetailsModal";
@@ -28,6 +31,7 @@ import {
   useGetOrderDetailsQuery,
   useRetryPaymentMutation,
   useVerifyPaymentMutation,
+  useCancelOrderMutation,
 } from "../redux/services/orderApi";
 import { getSocket } from "../lib/socket";
 import { loadRazorpayScript } from "../lib/razorpay";
@@ -261,6 +265,32 @@ export default function Orders() {
     }
   );
 
+  const [cancellingOrder, setCancellingOrder] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState("Ordered by mistake");
+  const [customReason, setCustomReason] = useState("");
+  const [cancelOrderMutation, { isLoading: isCancelling }] = useCancelOrderMutation();
+
+  const handleConfirmCancel = async () => {
+    if (!cancellingOrder) return;
+    const finalReason =
+      cancelReason === "Other"
+        ? customReason.trim() || "Customer requested cancellation"
+        : cancelReason;
+
+    const orderDbId = cancellingOrder.dbId || cancellingOrder.id;
+    try {
+      const res = await cancelOrderMutation({
+        orderId: Number(orderDbId),
+        cancelReason: finalReason,
+      }).unwrap();
+      toast.success(res?.message || "Order cancelled successfully!");
+      setCancellingOrder(null);
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || "Could not cancel order");
+    }
+  };
+
   // Socket.IO real-time event listeners for customer
   useEffect(() => {
     if (!user?.id) return;
@@ -290,6 +320,14 @@ export default function Orders() {
       refetch();
     };
 
+    const handleOrderCancelled = (data: any) => {
+      toast(
+        `Order #${data.orderNumber || data.orderId} was cancelled.`,
+        { icon: "❌" }
+      );
+      refetch();
+    };
+
     const handleNewMessage = (data: any) => {
       if (!selectedChatOrder || String(selectedChatOrder.dbId) !== String(data.orderId)) {
         toast(
@@ -301,12 +339,14 @@ export default function Orders() {
     socket.on("order_accepted", handleOrderAccepted);
     socket.on("order_rejected", handleOrderRejected);
     socket.on("order_status_updated", handleOrderStatusUpdated);
+    socket.on("order_cancelled", handleOrderCancelled);
     socket.on("customer_new_message", handleNewMessage);
 
     return () => {
       socket.off("order_accepted", handleOrderAccepted);
       socket.off("order_rejected", handleOrderRejected);
       socket.off("order_status_updated", handleOrderStatusUpdated);
+      socket.off("order_cancelled", handleOrderCancelled);
       socket.off("customer_new_message", handleNewMessage);
     };
   }, [user?.id, selectedChatOrder, refetch]);
@@ -346,6 +386,8 @@ export default function Orders() {
       return {
         id: o.order_number || `SFC-${o.id}`,
         dbId: o.id,
+        created_at: o.created_at,
+        cancellation: (o as any).cancellation,
         customerName: o.customer_name || addressJson?.receiver_name,
         customerPhone: o.customer_phone || addressJson?.phone_number,
         date: d.toLocaleDateString("en-IN", {
@@ -911,15 +953,18 @@ export default function Orders() {
                     (order.status === "Pending" ||
                       order.status === "Order Placed" ||
                       order.status === "Pending Payment") && (
-                      <div className="mt-3.5 flex items-center gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-xs text-amber-900">
-                        <span className="relative flex h-2.5 w-2.5 shrink-0">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                        </span>
-                        <div>
-                          <span className="font-bold">Waiting for order confirmation</span>
-                          <span className="text-amber-800"> — Your order has been placed and received. Waiting for store confirmation to begin preparation.</span>
+                      <div className="mt-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-xs text-amber-900">
+                        <div className="flex items-center gap-2.5">
+                          <span className="relative flex h-2.5 w-2.5 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                          </span>
+                          <div>
+                            <span className="font-bold">Waiting for order confirmation</span>
+                            <span className="text-amber-800"> — You can cancel without penalty before kitchen accepts and starts preparing.</span>
+                          </div>
                         </div>
+                       
                       </div>
                     )}
 
@@ -1059,6 +1104,8 @@ export default function Orders() {
                         View Details
                       </button>
 
+                     
+
                       <Link
                         href="/menu"
                         className="
@@ -1171,6 +1218,108 @@ export default function Orders() {
           onRetryPayment={handleRetryPayment}
           retryingOrderId={retryingOrderId}
         />
+      )}
+
+      {/* Cancel Order Modal */}
+      {cancellingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-xl border border-stone-200">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2.5 text-red-600">
+                <AlertCircle size={22} className="shrink-0" />
+                <h3 className="text-base font-black text-stone-900">
+                  Cancel Order #{cancellingOrder.id}?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCancellingOrder(null)}
+                className="text-stone-400 hover:text-stone-600 p-1 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-stone-600">
+                Are you sure you want to cancel this order? Since the store has not yet started preparing it, you can cancel with zero penalty.
+              </p>
+
+              {cancellingOrder.payment === "Online Payment" && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-900">
+                  <span className="font-bold">100% Instant Refund: </span>
+                  ₹{cancellingOrder.total} will be refunded automatically to your original payment method.
+                </div>
+              )}
+
+              <div>
+                <label className="text-[11px] font-bold text-stone-700 block mb-1.5 uppercase tracking-wider">
+                  Reason for Cancellation:
+                </label>
+                <div className="space-y-1.5 text-xs text-stone-800">
+                  {[
+                    "Ordered by mistake",
+                    "Change delivery address or phone",
+                    "Need to modify items or quantities",
+                    "Delivery time seems too long",
+                    "Other",
+                  ].map((r) => (
+                    <label
+                      key={r}
+                      className="flex items-center gap-2 rounded-lg border border-stone-100 px-3 py-2 hover:bg-stone-50 cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        name="cancel_reason_orders_modal"
+                        value={r}
+                        checked={cancelReason === r}
+                        onChange={() => setCancelReason(r)}
+                        className="text-[var(--color-primary)] focus:ring-0"
+                      />
+                      <span>{r}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {cancelReason === "Other" && (
+                  <textarea
+                    value={customReason}
+                    onChange={(e) => setCustomReason(e.target.value)}
+                    placeholder="Please specify your reason..."
+                    rows={2}
+                    className="mt-2 w-full rounded-xl border border-stone-300 p-2.5 text-xs focus:border-[var(--color-primary)] focus:outline-none"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2.5 pt-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setCancellingOrder(null)}
+                disabled={isCancelling}
+                className="rounded-xl border border-stone-300 px-4 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 cursor-pointer"
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancel}
+                disabled={isCancelling}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                {isCancelling ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Cancelling...</span>
+                  </>
+                ) : (
+                  <span>Confirm Cancellation</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
