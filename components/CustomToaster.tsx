@@ -13,11 +13,12 @@ export default function CustomToaster() {
         top: 24,
         right: 20,
         zIndex: 999999999,
-        pointerEvents: "auto",
+        pointerEvents: "none",
       }}
       toastOptions={{
         duration: 1500,
         style: {
+          pointerEvents: "auto",
           background: "var(--bg-surface, #ffffff)",
           color: "var(--color-text-primary, #1c1917)",
           borderRadius: "18px",
