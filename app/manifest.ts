@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "SFC Bakers",
     short_name: "SFC Bakers",
     description: "Good Food, Great Vibes — Freshly prepared food delivered fast.",
-    start_url: "/",
+    start_url: "/?source=pwa",
     scope: "/",
     display: "standalone",
     display_override: ["window-controls-overlay", "standalone", "minimal-ui"],
