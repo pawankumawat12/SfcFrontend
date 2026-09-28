@@ -181,6 +181,8 @@ export default function CartClient() {
     getGuestCartPreview({
       items: guestCartItems,
       offerCode: appliedOfferCode || undefined,
+      lat: activeDeliveryLoc?.lat != null ? Number(activeDeliveryLoc.lat) : undefined,
+      lng: activeDeliveryLoc?.lng != null ? Number(activeDeliveryLoc.lng) : undefined,
     })
       .unwrap()
       .then((res) => {
@@ -193,7 +195,7 @@ export default function CartClient() {
       return () => {
         isMounted = false;
       };
-    }, [user, guestCartItems, appliedOfferCode, getGuestCartPreview]);
+    }, [user, guestCartItems, appliedOfferCode, activeDeliveryLoc?.lat, activeDeliveryLoc?.lng, getGuestCartPreview]);
     
     // Safeguard: If user logs in and guest cart still has items, auto-merge!
     useEffect(() => {
@@ -478,7 +480,7 @@ export default function CartClient() {
           };
         }
       } else {
-        if (Number(it.store_id) !== Number(activeStoreId)) {
+        if (it.store_id != null && Number(it.store_id) !== Number(activeStoreId)) {
           return {
             cannotDeliver: true,
             reason:
