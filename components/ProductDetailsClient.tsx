@@ -159,6 +159,7 @@ export default function ProductDetailsClient({ product }: { product: any }) {
   // Interactive zoom on hover (Flipkart desktop style)
   const [isZoomed, setIsZoomed] = useState(false);
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
+  const [descExpanded, setDescExpanded] = useState(false);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -916,26 +917,34 @@ export default function ProductDetailsClient({ product }: { product: any }) {
             )}
 
             {/* Description */}
+            {(() => {
+              const desc = product.description ||
+                "Delicious and freshly prepared at SFC Bakers with quality ingredients for a great taste in every bite.";
+              return (
+                <div className="mt-6">
+                  <h2 className="text-sm font-black text-[var(--color-text-primary)]">
+                    About this item
+                  </h2>
+                  <p
+                    className={`mt-2 text-sm leading-7 text-[var(--color-text-secondary)] break-words [overflow-wrap:anywhere] transition-all duration-300 ${
+                      descExpanded ? "" : "line-clamp-4"
+                    }`}
+                  >
+                    {desc}
+                  </p>
+                  {desc.length > 200 && (
+                    <button
+                      type="button"
+                      onClick={() => setDescExpanded((p) => !p)}
+                      className="mt-1 text-xs font-bold text-[var(--color-primary)] hover:underline"
+                    >
+                      {descExpanded ? "Show Less ↑" : "Read More ↓"}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
-            <div className="mt-6">
-              <h2 className="text-sm font-black text-[var(--color-text-primary)]">
-                About this item
-              </h2>
-
-              <p
-                className="
-                  mt-2
-                  text-sm
-                  leading-7
-                  text-[var(--color-text-secondary)]
-                  break-words
-                  [overflow-wrap:anywhere]
-                "
-              >
-                {product.description ||
-                  "Delicious and freshly prepared at SFC Bakers with quality ingredients for a great taste in every bite."}
-              </p>
-            </div>
 
             {/* Product highlights */}
 

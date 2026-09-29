@@ -34,6 +34,7 @@ interface CustomerLocationPickerProps {
     lng: number,
     details?: AddressAutoFillDetails
   ) => void;
+  onGeocodingChange?: (isGeocoding: boolean) => void;
 }
 
 interface SuggestionItem {
@@ -96,12 +97,23 @@ export default function CustomerLocationPicker({
   latitude,
   longitude,
   onLocationChange,
+  onGeocodingChange,
 }: CustomerLocationPickerProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const activeTileLayerRef = useRef<L.TileLayer | null>(null);
   const searchWrapperRef = useRef<HTMLDivElement | null>(null);
+
+  const onLocationChangeRef = useRef(onLocationChange);
+  onLocationChangeRef.current = onLocationChange;
+
+  const onGeocodingChangeRef = useRef(onGeocodingChange);
+  onGeocodingChangeRef.current = onGeocodingChange;
+
+  const activeGeocodeIdRef = useRef(0);
+  const geocodeCacheRef = useRef<Map<string, AddressAutoFillDetails>>(new Map());
+  const fetchAddressDetailsRef = useRef<((lat: number, lng: number) => Promise<AddressAutoFillDetails | null>) | null>(null);
 
   const defaultLat = 26.9124; // Jaipur fallback
   const defaultLng = 75.7873;
@@ -187,62 +199,81 @@ export default function CustomerLocationPicker({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Fast fetch helper with timeout to prevent long hangs
+  const fetchWithTimeout = async (url: string, headers: HeadersInit = {}, timeoutMs = 2800) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { headers, signal: controller.signal });
+      return res;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   const fetchLiveSuggestions = async (queryText: string) => {
     setSearching(true);
     try {
       // 1. Try Photon (fast autocomplete)
-      const photonRes = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(queryText)}&limit=6`
-      );
-
       let items: SuggestionItem[] = [];
-      if (photonRes.ok) {
-        const photonData = await photonRes.json();
-        if (photonData?.features && photonData.features.length > 0) {
-          items = photonData.features.map((f: any) => {
-            const props = f.properties || {};
-            const title = props.name || props.street || queryText;
-            const subtitleParts = [
-              props.city || props.district || props.county,
-              props.state,
-              props.postcode,
-            ].filter(Boolean);
-            const subtitle = subtitleParts.join(", ") || props.country || "";
-            return {
-              lat: f.geometry.coordinates[1],
-              lon: f.geometry.coordinates[0],
-              title,
-              subtitle,
-              display_name: [title, subtitle].filter(Boolean).join(", "),
-            };
-          });
+      try {
+        const photonRes = await fetchWithTimeout(
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(queryText)}&limit=6`
+        );
+        if (photonRes.ok) {
+          const photonData = await photonRes.json();
+          if (photonData?.features && photonData.features.length > 0) {
+            items = photonData.features.map((f: any) => {
+              const props = f.properties || {};
+              const title = props.name || props.street || queryText;
+              const subtitleParts = [
+                props.city || props.district || props.county,
+                props.state,
+                props.postcode,
+              ].filter(Boolean);
+              const subtitle = subtitleParts.join(", ") || props.country || "";
+              return {
+                lat: f.geometry.coordinates[1],
+                lon: f.geometry.coordinates[0],
+                title,
+                subtitle,
+                display_name: [title, subtitle].filter(Boolean).join(", "),
+              };
+            });
+          }
         }
+      } catch {
+        // fallback to Nominatim
       }
 
       // 2. If Photon had no results or failed, fallback to Nominatim
       if (items.length === 0) {
-        const nomRes = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            queryText
-          )}&countrycodes=in&limit=6&addressdetails=1`,
-          { headers: { Accept: "application/json" } }
-        );
-        if (nomRes.ok) {
-          const nomData = await nomRes.json();
-          if (nomData && nomData.length > 0) {
-            items = nomData.map((item: any) => {
-              const parts = (item.display_name || "").split(",");
-              const title = parts[0]?.trim() || item.name;
-              const subtitle = parts.slice(1, 4).join(", ").trim();
-              return {
-                lat: parseFloat(item.lat),
-                lon: parseFloat(item.lon),
-                title,
-                subtitle,
-                display_name: item.display_name,
-              };
-            });
+        try {
+          const nomRes = await fetchWithTimeout(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+              queryText
+            )}&countrycodes=in&limit=6&addressdetails=1`,
+            { Accept: "application/json" }
+          );
+          if (nomRes.ok) {
+            const nomData = await nomRes.json();
+            if (nomData && nomData.length > 0) {
+              items = nomData.map((item: any) => {
+                const parts = (item.display_name || "").split(",");
+                const title = parts[0]?.trim() || item.name;
+                const subtitle = parts.slice(1, 4).join(", ").trim();
+                return {
+                  lat: parseFloat(item.lat),
+                  lon: parseFloat(item.lon),
+                  title,
+                  subtitle,
+                  display_name: item.display_name,
+                };
+              });
+            }
           }
+        } catch {
+          // ignore
         }
       }
 
@@ -255,142 +286,178 @@ export default function CustomerLocationPicker({
     }
   };
 
-  // Robust reverse geocoding helper using Photon -> BigDataCloud -> Nominatim
+  // Ultra-fast reverse geocoding with caching, timeouts, and race-condition prevention
   const fetchAddressDetails = useCallback(
     async (lat: number, lng: number): Promise<AddressAutoFillDetails | null> => {
+      const cacheKey = `${lat.toFixed(4)}_${lng.toFixed(4)}`;
+      if (geocodeCacheRef.current.has(cacheKey)) {
+        const cached = geocodeCacheRef.current.get(cacheKey)!;
+        setResolvedSpot(cached.formattedAddress || cached.city || "Selected Location");
+        setGeocoding(false);
+        onGeocodingChangeRef.current?.(false);
+        return cached;
+      }
+
+      const reqId = ++activeGeocodeIdRef.current;
+      setGeocoding(true);
+      onGeocodingChangeRef.current?.(true);
+
       try {
-        setGeocoding(true);
-
-        // 1. Try Photon reverse geocoding (fast and accurate for Indian areas)
+        // 1. Try BigDataCloud (Very fast for India coordinates, typically < 300ms)
         try {
-          const photonRes = await fetch(
-            `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}`
+          const bdcRes = await fetchWithTimeout(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`,
+            {},
+            2400
           );
-          if (photonRes.ok) {
-            const pData = await photonRes.json();
-            const props = pData?.features?.[0]?.properties;
-            if (props) {
-              const detectedCity =
-                props.city || props.district || props.county || "Sikar";
-              const detectedState = props.state || "Rajasthan";
-              const detectedPincode = props.postcode || "";
-
-              const roadParts = [
-                props.name,
-                props.street && props.name !== props.street ? props.street : null,
-                props.district && props.district !== props.name ? props.district : null,
-              ]
-                .filter(Boolean)
-                .filter((val, idx, arr) => arr.indexOf(val) === idx);
-
-              const detailedAddress =
-                roadParts.length > 0
-                  ? roadParts.join(", ")
-                  : props.name || "Selected Location";
-
-              setResolvedSpot(detailedAddress);
-
-              return {
-                city: detectedCity,
-                state: detectedState,
-                pincode: detectedPincode,
-                formattedAddress: detailedAddress,
-                landmark: props.name || "",
-                houseNumber: props.housenumber || "",
-                rawAddress: props,
-              };
-            }
-          }
-        } catch {
-          // fallback
-        }
-
-        // 2. Try BigDataCloud free client reverse geocoding
-        try {
-          const bdcRes = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
-          );
-          if (bdcRes.ok) {
+          if (bdcRes.ok && activeGeocodeIdRef.current === reqId) {
             const bdc = await bdcRes.json();
-            const detectedCity = bdc.locality || bdc.city || "Sikar";
+            const detectedCity = bdc.locality || bdc.city || "Jaipur";
             const detectedState = bdc.principalSubdivision || "Rajasthan";
             const detectedPincode = bdc.postcode || "";
             const spotName = [bdc.locality, bdc.city].filter(Boolean).join(", ") || "Selected Location";
-            setResolvedSpot(spotName);
 
-            return {
-              city: detectedCity,
-              state: detectedState,
-              pincode: detectedPincode,
-              formattedAddress: spotName,
-              landmark: "",
-              houseNumber: "",
-              rawAddress: bdc,
-            };
+            if (detectedCity && spotName !== "Selected Location") {
+              const result: AddressAutoFillDetails = {
+                city: detectedCity,
+                state: detectedState,
+                pincode: detectedPincode,
+                formattedAddress: spotName,
+                landmark: "",
+                houseNumber: "",
+                rawAddress: bdc,
+              };
+              setResolvedSpot(spotName);
+              geocodeCacheRef.current.set(cacheKey, result);
+              return result;
+            }
           }
         } catch {
-          // fallback
+          // fallback to next
         }
 
-        // 3. Fallback to Nominatim
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-          { headers: { Accept: "application/json" } }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.address) {
-            const addr = data.address;
-            const detectedCity =
-              addr.city ||
-              addr.town ||
-              addr.village ||
-              addr.county ||
-              addr.state_district ||
-              "Sikar";
-            const detectedState = addr.state || "Rajasthan";
-            const detectedPincode = addr.postcode || "";
+        // 2. Try Photon reverse geocoding
+        if (activeGeocodeIdRef.current === reqId) {
+          try {
+            const photonRes = await fetchWithTimeout(
+              `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}`,
+              {},
+              2600
+            );
+            if (photonRes.ok && activeGeocodeIdRef.current === reqId) {
+              const pData = await photonRes.json();
+              const props = pData?.features?.[0]?.properties;
+              if (props) {
+                const detectedCity =
+                  props.city || props.district || props.county || "Jaipur";
+                const detectedState = props.state || "Rajasthan";
+                const detectedPincode = props.postcode || "";
 
-            const roadParts = [
-              addr.amenity || addr.shop || addr.building,
-              addr.road,
-              addr.suburb || addr.neighbourhood || addr.residential,
-              addr.city_district || addr.subdistrict,
-            ]
-              .filter(Boolean)
-              .filter((val, idx, arr) => arr.indexOf(val) === idx);
+                const roadParts = [
+                  props.name,
+                  props.street && props.name !== props.street ? props.street : null,
+                  props.district && props.district !== props.name ? props.district : null,
+                ]
+                  .filter(Boolean)
+                  .filter((val, idx, arr) => arr.indexOf(val) === idx);
 
-            const detailedAddress =
-              roadParts.length > 0
-                ? roadParts.join(", ")
-                : data.display_name
-                ? data.display_name.split(",").slice(0, 3).join(", ").trim()
-                : "";
+                const detailedAddress =
+                  roadParts.length > 0
+                    ? roadParts.join(", ")
+                    : props.name || "Selected Location";
 
-            const spotName =
-              detailedAddress || data.display_name?.split(",")[0] || "Selected Location";
-            setResolvedSpot(spotName);
+                const result: AddressAutoFillDetails = {
+                  city: detectedCity,
+                  state: detectedState,
+                  pincode: detectedPincode,
+                  formattedAddress: detailedAddress,
+                  landmark: props.name || "",
+                  houseNumber: props.housenumber || "",
+                  rawAddress: props,
+                };
 
-            return {
-              city: detectedCity,
-              state: detectedState,
-              pincode: detectedPincode,
-              formattedAddress: detailedAddress,
-              landmark: addr.amenity || addr.shop || addr.building || "",
-              houseNumber: addr.house_number || "",
-              rawAddress: addr,
-            };
+                setResolvedSpot(detailedAddress);
+                geocodeCacheRef.current.set(cacheKey, result);
+                return result;
+              }
+            }
+          } catch {
+            // fallback
           }
         }
-      } catch {
-        // ignore network error
+
+        // 3. Fallback to OpenStreetMap Nominatim
+        if (activeGeocodeIdRef.current === reqId) {
+          try {
+            const res = await fetchWithTimeout(
+              `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+              { Accept: "application/json" },
+              2800
+            );
+            if (res.ok && activeGeocodeIdRef.current === reqId) {
+              const data = await res.json();
+              if (data?.address) {
+                const addr = data.address;
+                const detectedCity =
+                  addr.city ||
+                  addr.town ||
+                  addr.village ||
+                  addr.county ||
+                  addr.state_district ||
+                  "Jaipur";
+                const detectedState = addr.state || "Rajasthan";
+                const detectedPincode = addr.postcode || "";
+
+                const roadParts = [
+                  addr.amenity || addr.shop || addr.building,
+                  addr.road,
+                  addr.suburb || addr.neighbourhood || addr.residential,
+                  addr.city_district || addr.subdistrict,
+                ]
+                  .filter(Boolean)
+                  .filter((val, idx, arr) => arr.indexOf(val) === idx);
+
+                const detailedAddress =
+                  roadParts.length > 0
+                    ? roadParts.join(", ")
+                    : data.display_name
+                    ? data.display_name.split(",").slice(0, 3).join(", ").trim()
+                    : "";
+
+                const spotName =
+                  detailedAddress || data.display_name?.split(",")[0] || "Selected Location";
+
+                const result: AddressAutoFillDetails = {
+                  city: detectedCity,
+                  state: detectedState,
+                  pincode: detectedPincode,
+                  formattedAddress: detailedAddress || spotName,
+                  landmark: addr.amenity || addr.shop || addr.building || "",
+                  houseNumber: addr.house_number || "",
+                  rawAddress: addr,
+                };
+
+                setResolvedSpot(spotName);
+                geocodeCacheRef.current.set(cacheKey, result);
+                return result;
+              }
+            }
+          } catch {
+            // ignore network error
+          }
+        }
       } finally {
-        setGeocoding(false);
+        if (activeGeocodeIdRef.current === reqId) {
+          setGeocoding(false);
+          onGeocodingChangeRef.current?.(false);
+        }
       }
       return null;
     },
     []
   );
+
+  fetchAddressDetailsRef.current = fetchAddressDetails;
 
   const switchTileLayer = useCallback((type: "satellite" | "streets") => {
     if (!mapInstanceRef.current) return;
@@ -432,8 +499,14 @@ export default function CustomerLocationPicker({
       const cleanLng = Math.round(lng * 1000000) / 1000000;
       setCurrentLat(cleanLat);
       setCurrentLng(cleanLng);
-      const details = await fetchAddressDetails(cleanLat, cleanLng);
-      onLocationChange(cleanLat, cleanLng, details || undefined);
+      // Immediately notify parent of coordinates so selection is never empty or stale
+      onLocationChangeRef.current(cleanLat, cleanLng);
+      if (fetchAddressDetailsRef.current) {
+        const details = await fetchAddressDetailsRef.current(cleanLat, cleanLng);
+        if (details) {
+          onLocationChangeRef.current(cleanLat, cleanLng, details);
+        }
+      }
     };
 
     marker.on("dragend", () => {
@@ -454,7 +527,14 @@ export default function CustomerLocationPicker({
       map.invalidateSize();
     }, 250);
 
-    fetchAddressDetails(initialLat, initialLng);
+    // Initial mount reverse-geocode
+    if (fetchAddressDetailsRef.current) {
+      fetchAddressDetailsRef.current(initialLat, initialLng).then((details) => {
+        if (details) {
+          onLocationChangeRef.current(initialLat, initialLng, details);
+        }
+      });
+    }
 
     return () => {
       map.remove();
@@ -483,8 +563,20 @@ export default function CustomerLocationPicker({
       mapInstanceRef.current.flyTo([cleanLat, cleanLng], 17, { duration: 1.2 });
     }
 
-    const details = await fetchAddressDetails(cleanLat, cleanLng);
-    onLocationChange(cleanLat, cleanLng, details || undefined);
+    // Immediately notify with suggestion title so fields are not empty
+    const suggestionDetails: AddressAutoFillDetails = {
+      formattedAddress: item.title,
+      landmark: item.title,
+      city: item.subtitle?.split(",")?.[0]?.trim() || "Jaipur",
+    };
+    onLocationChangeRef.current(cleanLat, cleanLng, suggestionDetails);
+
+    if (fetchAddressDetailsRef.current) {
+      const details = await fetchAddressDetailsRef.current(cleanLat, cleanLng);
+      if (details) {
+        onLocationChangeRef.current(cleanLat, cleanLng, details);
+      }
+    }
     toast.success(`Selected: ${item.title}`);
   };
 
@@ -528,8 +620,13 @@ export default function CustomerLocationPicker({
             mapInstanceRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
           }
 
-          const details = await fetchAddressDetails(lat, lng);
-          onLocationChange(lat, lng, details || undefined);
+          onLocationChangeRef.current(lat, lng);
+          if (fetchAddressDetailsRef.current) {
+            const details = await fetchAddressDetailsRef.current(lat, lng);
+            if (details) {
+              onLocationChangeRef.current(lat, lng, details);
+            }
+          }
           toast.success("Current GPS location detected!");
         } catch {
           toast.error("Could not fetch address for this location");
@@ -551,7 +648,7 @@ export default function CustomerLocationPicker({
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  }, [fetchAddressDetails, onLocationChange]);
+  }, []);
 
   return (
     <div className="customer-location-picker rounded-2xl border border-stone-200 bg-stone-50/80 p-3">
@@ -761,6 +858,16 @@ export default function CustomerLocationPicker({
       >
         <div ref={mapContainerRef} style={{ height: "100%", width: "100%", zIndex: 1 }} />
 
+        {/* Floating loading overlay when geocoding is active */}
+        {geocoding && (
+          <div className="absolute inset-x-0 top-3 z-[1000] flex justify-center px-3 pointer-events-none">
+            <div className="flex items-center gap-2 rounded-full bg-stone-900/90 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur-xs animate-pulse border border-stone-700">
+              <Loader2 size={13} className="animate-spin text-amber-400" />
+              <span>Fetching exact address for pinned location...</span>
+            </div>
+          </div>
+        )}
+
         {/* Satellite/Street floating pill */}
         <div className="pointer-events-none absolute right-2.5 top-2.5 z-[1000] flex items-center gap-1 rounded-full bg-black/65 px-2.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-xs">
           <span
@@ -774,15 +881,22 @@ export default function CustomerLocationPicker({
 
       {/* Bottom helper & spot status */}
       <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
-        <div className="flex items-center gap-1 font-semibold text-emerald-800">
-          <CheckCircle2 size={13} className="text-emerald-600" />
-          <span className="truncate">
-            {geocoding
-              ? "Reading address..."
-              : resolvedSpot
-              ? `Pin set: ${resolvedSpot}`
-              : `Pin at ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}`}
-          </span>
+        <div className="flex items-center gap-1.5 font-semibold text-stone-800">
+          {geocoding ? (
+            <>
+              <Loader2 size={13} className="animate-spin text-amber-600 shrink-0" />
+              <span className="text-amber-700">Reading exact address for pin...</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+              <span className="text-emerald-800 truncate">
+                {resolvedSpot
+                  ? `Pin set: ${resolvedSpot}`
+                  : `Pin at ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}`}
+              </span>
+            </>
+          )}
         </div>
         <span className="text-[10px] text-stone-500">
           Drag red pin onto your exact building or gate

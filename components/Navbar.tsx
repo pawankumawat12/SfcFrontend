@@ -376,7 +376,7 @@ const Navbar = () => {
         {deliveryLoc?.outOfDeliveryZone && !isStoreClosed && (
           <div className="bg-amber-500 text-stone-950 text-xs font-bold py-1.5 px-4 text-center flex items-center justify-center gap-2 shadow-xs">
             <AlertTriangle size={15} className="shrink-0 text-stone-950" />
-            <span>Currently, we deliver within 10 km of our branch. Your address is outside our delivery zone.</span>
+            <span>Your address is outside our delivery zone.</span>
             <button
               type="button"
               onClick={() => setLocationModalOpen(true)}
@@ -423,7 +423,7 @@ const Navbar = () => {
               }`}
               title={
                 deliveryLoc?.outOfDeliveryZone
-                  ? deliveryLoc.deliveryWarning || "Currently, we deliver within 10 km of our branch"
+                  ? "Sorry, we cannot deliver to this address. Please choose a different location."
                   : "Change Delivery Location"
               }
             >
@@ -443,7 +443,7 @@ const Navbar = () => {
               <div className="min-w-0 flex-1 leading-tight">
                 <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider">
                   <span className={deliveryLoc?.outOfDeliveryZone ? "text-amber-800" : "text-stone-400"}>
-                    {deliveryLoc?.outOfDeliveryZone ? "Outside 10 km Zone" : "Delivering to"}
+                    {deliveryLoc?.outOfDeliveryZone ? "Outside Zone" : "Delivering to"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 text-xs font-bold text-[var(--color-text-primary)]">
@@ -457,7 +457,7 @@ const Navbar = () => {
                 </div>
                 {deliveryLoc?.outOfDeliveryZone && (
                   <div className="text-[10px] font-semibold text-amber-800 truncate leading-none mt-0.5">
-                    We deliver within 10 km
+                    Delivery not available here
                   </div>
                 )}
               </div>
@@ -1014,7 +1014,7 @@ const Navbar = () => {
               <span className="text-[11px] font-medium text-stone-700 truncate">
                 {deliveryLoc?.outOfDeliveryZone ? (
                   <span className="text-amber-900 font-bold">
-                    ⚠️ Outside 10 km:{" "}
+                    Outside
                     <span className="underline decoration-dotted">{deliveryLoc?.shortAddress}</span>
                   </span>
                 ) : (

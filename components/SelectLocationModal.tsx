@@ -69,10 +69,14 @@ export default function SelectLocationModal({
     useLazyResolveStoreByLocationQuery();
 
   // Location and address form state
+  const [isGeocoding, setIsGeocoding] = useState<boolean>(false);
   const [pickedLat, setPickedLat] = useState<number | null>(null);
   const [pickedLng, setPickedLng] = useState<number | null>(null);
   const [selectedSavedId, setSelectedSavedId] = useState<number | null>(null);
   const [editingAddressId, setEditingAddressId] = useState<number | null>(null);
+
+  const isLocationActionInProgress =
+    isGeocoding || isResolving || isSavingAddress || isUpdatingAddress;
 
   // Address fields
   const [houseNumber, setHouseNumber] = useState<string>("");
@@ -149,6 +153,7 @@ export default function SelectLocationModal({
   };
 
   const handleSelectSavedAddress = (addr: Address) => {
+    setIsGeocoding(false);
     setSelectedSavedId(addr.id);
     setEditingAddressId(addr.id);
     const lat = addr.latitude ? Number(addr.latitude) : 26.9124;
@@ -167,6 +172,17 @@ export default function SelectLocationModal({
   };
 
   const handleConfirmLocation = async () => {
+    if (isGeocoding) {
+      toast("Pinpoint address is still being detected. Please wait a moment...", {
+        icon: "📍",
+      });
+      return;
+    }
+
+    if (isResolving || isSavingAddress || isUpdatingAddress) {
+      return;
+    }
+
     if (pickedLat == null || pickedLng == null) {
       toast.error("Please pick your location on the map or select a saved address first.");
       return;
@@ -200,7 +216,7 @@ export default function SelectLocationModal({
 
       if (isOutOfDeliveryZone) {
         toast(
-          res?.message || "Currently, we deliver within 10 km of our branch. This address is outside our delivery zone.",
+          res?.message || "This address is outside our delivery zone.",
           { duration: 5500, icon: "⚠️" }
         );
       }
@@ -289,7 +305,7 @@ export default function SelectLocationModal({
         canDeliver: !isOutOfDeliveryZone,
         outOfDeliveryZone: isOutOfDeliveryZone,
         deliveryWarning: isOutOfDeliveryZone
-          ? res?.message || "Currently, we deliver within 10 km of our branch."
+          ? res?.message || "Delivery is available in our covered service areas."
           : null,
         maxDeliveryRadius: (res as any)?.max_delivery_distance || 10,
       };
@@ -343,7 +359,9 @@ export default function SelectLocationModal({
     currentStored.lat &&
     currentStored.lng
   );
-  const effectiveCanDismiss = Boolean(canDismiss && isLocationConfigured);
+  const effectiveCanDismiss = Boolean(
+    canDismiss && isLocationConfigured && !isLocationActionInProgress
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -495,8 +513,46 @@ export default function SelectLocationModal({
               latitude={pickedLat}
               longitude={pickedLng}
               onLocationChange={handleLocationPicked}
+              onGeocodingChange={setIsGeocoding}
             />
           </div>
+
+          {/* Live Progress / Loading Banners */}
+          {isGeocoding && (
+            <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 border border-amber-200/90 p-3 text-xs text-amber-900 shadow-xs animate-pulse">
+              <Loader2 size={16} className="animate-spin text-amber-600 mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-amber-950">Detecting Pinned Address...</p>
+                <p className="mt-0.5 text-[11px] text-amber-800">
+                  Fetching exact street & locality for your pin so you don&apos;t pick the wrong address.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {isResolving && (
+            <div className="flex items-start gap-2.5 rounded-2xl bg-sky-50 border border-sky-200/90 p-3 text-xs text-sky-900 shadow-xs">
+              <Loader2 size={16} className="animate-spin text-sky-600 mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-sky-950">Resolving Bakery Branch...</p>
+                <p className="mt-0.5 text-[11px] text-sky-800">
+                  Locating the closest bakery branch and checking delivery coverage.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {(isSavingAddress || isUpdatingAddress) && (
+            <div className="flex items-start gap-2.5 rounded-2xl bg-emerald-50 border border-emerald-200/90 p-3 text-xs text-emerald-900 shadow-xs">
+              <Loader2 size={16} className="animate-spin text-emerald-600 mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-emerald-950">Saving Delivery Address...</p>
+                <p className="mt-0.5 text-[11px] text-emerald-800">
+                  Securely saving your address for fast one-tap ordering.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* 3. Address Detail Fields (Blinkit style full address inputs) */}
           <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 space-y-3">
@@ -506,7 +562,7 @@ export default function SelectLocationModal({
                 <span>Delivery Address Details</span>
               </span>
               <span className="text-[10.5px] font-medium text-stone-500">
-                Auto-saved for seamless ordering
+                {isLocationActionInProgress ? "Syncing location..." : "Auto-saved for seamless ordering"}
               </span>
             </div>
 
@@ -518,10 +574,11 @@ export default function SelectLocationModal({
                 </label>
                 <input
                   type="text"
+                  disabled={isLocationActionInProgress}
                   value={houseNumber}
                   onChange={(e) => setHouseNumber(e.target.value)}
                   placeholder="e.g. Flat 302, Floor 3, B-Block"
-                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs disabled:opacity-60 disabled:bg-stone-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -531,10 +588,11 @@ export default function SelectLocationModal({
                 </label>
                 <input
                   type="text"
+                  disabled={isLocationActionInProgress}
                   value={roadArea}
                   onChange={(e) => setRoadArea(e.target.value)}
                   placeholder="e.g. Shivam Enclave, Bajor Road"
-                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs disabled:opacity-60 disabled:bg-stone-100 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -547,10 +605,11 @@ export default function SelectLocationModal({
                 </label>
                 <input
                   type="text"
+                  disabled={isLocationActionInProgress}
                   value={landmark}
                   onChange={(e) => setLandmark(e.target.value)}
                   placeholder="e.g. Near HDFC Bank, Opp. Green Park"
-                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs disabled:opacity-60 disabled:bg-stone-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -560,6 +619,7 @@ export default function SelectLocationModal({
                 </label>
                 <input
                   type="text"
+                  disabled={isLocationActionInProgress}
                   value={`${city}${pincode ? ` - ${pincode}` : ""}`}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -568,7 +628,7 @@ export default function SelectLocationModal({
                     if (parts[1]) setPincode(parts[1].trim());
                   }}
                   placeholder="e.g. Jaipur - 302018"
-                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs disabled:opacity-60 disabled:bg-stone-100 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -583,10 +643,11 @@ export default function SelectLocationModal({
                   <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                   <input
                     type="text"
+                    disabled={isLocationActionInProgress}
                     value={receiverName}
                     onChange={(e) => setReceiverName(e.target.value)}
                     placeholder="e.g. Deepak Sharma"
-                    className="w-full rounded-xl border border-stone-300 bg-white py-2 pl-8.5 pr-3 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs"
+                    className="w-full rounded-xl border border-stone-300 bg-white py-2 pl-8.5 pr-3 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs disabled:opacity-60 disabled:bg-stone-100 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -601,11 +662,12 @@ export default function SelectLocationModal({
                     type="tel"
                     inputMode="numeric"
                     autoComplete="tel"
+                    disabled={isLocationActionInProgress}
                     value={phone}
                     onChange={(e) => setPhone(sanitizePhoneInput(e.target.value))}
                     placeholder="10-digit mobile number"
                     maxLength={10}
-                    className="w-full rounded-xl border border-stone-300 bg-white py-2 pl-9 pr-3 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs"
+                    className="w-full rounded-xl border border-stone-300 bg-white py-2 pl-9 pr-3 text-xs text-stone-800 placeholder-stone-400 focus:border-[var(--color-primary)] focus:outline-hidden shadow-2xs disabled:opacity-60 disabled:bg-stone-100 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -628,8 +690,9 @@ export default function SelectLocationModal({
                     <button
                       key={item.id}
                       type="button"
+                      disabled={isLocationActionInProgress}
                       onClick={() => setLabel(item.id)}
-                      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+                      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                         isCur
                           ? "border-[var(--color-primary)] bg-[var(--color-primary-50)] text-[var(--color-primary)] shadow-2xs"
                           : "border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:bg-stone-50"
@@ -665,13 +728,23 @@ export default function SelectLocationModal({
           <button
             type="button"
             onClick={handleConfirmLocation}
-            disabled={isResolving || isSavingAddress || isUpdatingAddress || pickedLat == null}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--color-primary)] px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md transition hover:opacity-95 active:scale-98 disabled:opacity-50 cursor-pointer"
+            disabled={isLocationActionInProgress || pickedLat == null || pickedLng == null}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--color-primary)] px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md transition hover:opacity-95 active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            {isResolving || isSavingAddress || isUpdatingAddress ? (
+            {isGeocoding ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                <span>Checking branch & saving address...</span>
+                <span>Reading Address...</span>
+              </>
+            ) : isResolving ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Checking Branch & Zone...</span>
+              </>
+            ) : isSavingAddress || isUpdatingAddress ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Saving Address...</span>
               </>
             ) : (
               <>

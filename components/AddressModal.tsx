@@ -63,6 +63,7 @@ export default function AddressModal({
   const [createAddress, { isLoading: isCreating }] = useCreateAddressMutation();
   const [updateAddress, { isLoading: isUpdating }] = useUpdateAddressMutation();
   const isSaving = isCreating || isUpdating;
+  const [isGeocoding, setIsGeocoding] = useState<boolean>(false);
 
   const authUser = useSelector((state: any) => state.auth?.user);
   const [label, setLabel] = useState<string>("Home");
@@ -152,6 +153,11 @@ export default function AddressModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isGeocoding) {
+      toast("Please wait while your pinpoint address is detected.", { icon: "📍" });
+      return;
+    }
 
     if (!houseNumber.trim()) {
       toast.error("Please enter house / flat / block number");
@@ -326,7 +332,20 @@ export default function AddressModal({
             latitude={latitude}
             longitude={longitude}
             onLocationChange={handleMapLocationChange}
+            onGeocodingChange={setIsGeocoding}
           />
+
+          {isGeocoding && (
+            <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 border border-amber-200/90 p-3 text-xs text-amber-900 shadow-xs animate-pulse">
+              <LoaderCircle size={16} className="animate-spin text-amber-600 mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-amber-950">Detecting Pinned Address...</p>
+                <p className="mt-0.5 text-[11px] text-amber-800">
+                  Reading street & locality for your pin so the correct address is saved.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* 2. HOUSE / FLAT / BLOCK NO. (Required) */}
           <div>
@@ -503,7 +522,7 @@ export default function AddressModal({
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || isGeocoding}
               className="
                 w-full
                 flex
@@ -529,6 +548,11 @@ export default function AddressModal({
                 <>
                   <LoaderCircle size={16} className="animate-spin" />
                   <span>Saving Address...</span>
+                </>
+              ) : isGeocoding ? (
+                <>
+                  <LoaderCircle size={16} className="animate-spin" />
+                  <span>Detecting Pinned Address...</span>
                 </>
               ) : (
                 <>
