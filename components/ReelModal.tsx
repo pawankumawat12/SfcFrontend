@@ -86,21 +86,21 @@ export default function ReelModal({
     currentIndex !== null && currentIndex !== undefined ? currentIndex : 0;
   const currentReel = isExplicitlyOpen ? activeReels[activeIdx] || reel : null;
 
-  const canGoPrev = activeIdx > 0;
-  const canGoNext = activeIdx < activeReels.length - 1;
+  const canGoPrev = activeReels.length > 1;
+  const canGoNext = activeReels.length > 1;
 
   const handlePrev = () => {
-    if (canGoPrev && onNavigate) {
-      setSlideAnim("down");
-      onNavigate(activeIdx - 1);
-    }
+    if (activeReels.length <= 1 || !onNavigate) return;
+    setSlideAnim("down");
+    const prevIdx = (activeIdx - 1 + activeReels.length) % activeReels.length;
+    onNavigate(prevIdx);
   };
 
   const handleNext = () => {
-    if (canGoNext && onNavigate) {
-      setSlideAnim("up");
-      onNavigate(activeIdx + 1);
-    }
+    if (activeReels.length <= 1 || !onNavigate) return;
+    setSlideAnim("up");
+    const nextIdx = (activeIdx + 1) % activeReels.length;
+    onNavigate(nextIdx);
   };
 
   // Keyboard navigation & lock background scroll
@@ -217,22 +217,21 @@ export default function ReelModal({
     const diffY = touchDistanceY.current; // > 0 = swiped UP, < 0 = swiped DOWN
     const diffX = touchDistanceX.current;
 
-    // Minimum swipe threshold: 30px
-    if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 30) {
-      if (diffY > 30) {
-        // Swiped UP -> Next reel
-        if (canGoNext) handleNext();
-      } else if (diffY < -30) {
-        // Swiped DOWN -> Previous reel or dismiss
-        if (canGoPrev) {
-          handlePrev();
-        } else if (diffY < -75) {
-          onClose();
-        }
+    // Minimum swipe threshold: 25px
+    if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 25) {
+      if (diffY > 25) {
+        // Swiped UP (niche se uper) -> Next reel
+        handleNext();
+      } else if (diffY < -25) {
+        // Swiped DOWN (uper se niche) -> Previous / other reel (loops smoothly!)
+        handlePrev();
       }
-    } else if (Math.abs(diffX) >= Math.abs(diffY) && Math.abs(diffX) > 40) {
-      if (diffX > 40 && canGoNext) handleNext();
-      else if (diffX < -40 && canGoPrev) handlePrev();
+    } else if (Math.abs(diffX) >= Math.abs(diffY) && Math.abs(diffX) > 35) {
+      if (diffX > 35) {
+        handleNext();
+      } else if (diffX < -35) {
+        handlePrev();
+      }
     }
 
     touchStartY.current = null;
@@ -336,7 +335,7 @@ export default function ReelModal({
 
       {/* Instagram Reel Container (Full screen on mobile, card on desktop) */}
       <div
-        className={`relative flex flex-col w-full h-[100dvh] sm:h-[88vh] sm:max-w-[400px] sm:rounded-3xl bg-neutral-950 overflow-hidden shadow-2xl border-0 sm:border sm:border-white/20 z-10 transition-transform duration-300 select-none ${
+        className={`relative flex flex-col w-full h-[100dvh] sm:h-[88vh] sm:max-w-[400px] sm:rounded-3xl bg-neutral-950 overflow-hidden shadow-2xl border-0 sm:border sm:border-white/20 z-10 transition-transform duration-300 select-none touch-none overscroll-none ${
           slideAnim === "up"
             ? "animate-in slide-in-from-bottom duration-300"
             : slideAnim === "down"
@@ -348,6 +347,7 @@ export default function ReelModal({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         {/* Top Floating Header Bar */}
         <div className="absolute top-0 inset-x-0 z-30 flex items-center justify-between p-3.5 sm:p-4 bg-gradient-to-b from-black/85 via-black/40 to-transparent pointer-events-auto">
@@ -430,10 +430,14 @@ export default function ReelModal({
                 className="h-full w-full object-cover select-none pointer-events-none"
               />
 
-              {/* Gesture Capture Overlay: Tap to Play/Pause, Double Tap to Like */}
+              {/* Gesture Capture Overlay: Tap to Play/Pause, Double Tap to Like, Swipe to Navigate */}
               <div
-                className="absolute inset-0 z-20 cursor-pointer"
+                className="absolute inset-0 z-20 cursor-pointer touch-none"
                 onClick={handleVideoTap}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchEnd}
                 aria-label="Tap to play/pause or swipe vertically to change reels"
               />
             </>

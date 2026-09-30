@@ -7,6 +7,7 @@ import "../styles/global.css";
 import Providers from "./providers";
 import CustomToaster from "@/components/CustomToaster";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import PWAExitConfirmation from "@/components/PWAExitConfirmation";
 import WhatsAppChatButton from "@/components/WhatsAppChatButton";
 import { getSiteUrl } from "@/utils/backendUrl";
 
@@ -101,6 +102,7 @@ export default function RootLayout({
           <WhatsAppChatButton />
           <Footer />
           <PWAInstallPrompt />
+          <PWAExitConfirmation />
         </Providers>
       </body>
     </html>
