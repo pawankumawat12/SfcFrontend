@@ -801,7 +801,7 @@ export default function PopularProducts() {
                           <>
                             <Plus size={14} />
                             <span>Add</span>
-                            <span className="hidden sm:inline">&nbsp;to Cart</span>
+                            <span className="hidden sm:inline">to Cart</span>
                           </>
                         )}
                       </button>
