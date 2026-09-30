@@ -4,7 +4,7 @@ export interface ReelItem {
   id: number;
   title: string;
   video_url: string;
-  platform: "youtube" | "instagram";
+  platform: "youtube" | "instagram" | "direct";
   thumbnail_url: string | null;
   sort_order: number;
   is_active: boolean;

@@ -128,6 +128,11 @@ export default function ReelsSlider({
           >
             {reels.map((reel, index) => {
               const isInsta = reel.platform === "instagram";
+              const isDirect =
+                reel.platform === "direct" ||
+                /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(reel.video_url) ||
+                reel.video_url.includes("/uploads/") ||
+                reel.video_url.includes("/video/upload/");
 
               return (
                 <div
@@ -145,6 +150,14 @@ export default function ReelsSlider({
                       alt={reel.title}
                       className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
                       loading="lazy"
+                    />
+                  ) : isDirect ? (
+                    <video
+                      src={`${reel.video_url}#t=0.5`}
+                      preload="metadata"
+                      muted
+                      playsInline
+                      className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-stone-900 text-stone-600">

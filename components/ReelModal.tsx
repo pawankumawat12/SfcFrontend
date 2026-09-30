@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, ExternalLink, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ExternalLink, Sparkles, ChevronLeft, ChevronRight, Film } from "lucide-react";
 import { FaInstagram, FaYoutube } from "react-icons/fa";
 import { ReelItem } from "../redux/services/reelApi";
 
@@ -14,7 +14,7 @@ interface ReelModalProps {
   onNavigate?: (newIndex: number) => void;
 }
 
-export function getEmbedUrl(url: string = "", platform: "youtube" | "instagram" = "youtube"): string {
+export function getEmbedUrl(url: string = "", platform: string = "youtube"): string {
   if (!url) return "";
 
   if (platform === "instagram" || /instagram\.com/i.test(url)) {
@@ -148,8 +148,13 @@ export default function ReelModal({
 
   if (!mounted || !isExplicitlyOpen || !currentReel) return null;
 
-  const isInsta = currentReel.platform === "instagram" || /instagram\.com/i.test(currentReel.video_url);
-  const embedUrl = getEmbedUrl(currentReel.video_url, currentReel.platform);
+  const isDirect =
+    currentReel.platform === "direct" ||
+    /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(currentReel.video_url) ||
+    currentReel.video_url.includes("/uploads/") ||
+    currentReel.video_url.includes("/video/upload/");
+  const isInsta = !isDirect && (currentReel.platform === "instagram" || /instagram\.com/i.test(currentReel.video_url));
+  const embedUrl = isDirect ? "" : getEmbedUrl(currentReel.video_url, currentReel.platform);
 
   return createPortal(
     <div
@@ -165,7 +170,9 @@ export default function ReelModal({
       <div
         key={`ambient-${currentReel.id}`}
         className={`pointer-events-none absolute h-[460px] w-[340px] rounded-full blur-[110px] opacity-40 transition-all duration-700 ${
-          isInsta
+          isDirect
+            ? "bg-gradient-to-tr from-emerald-500 via-teal-500 to-amber-500"
+            : isInsta
             ? "bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600"
             : "bg-red-600"
         }`}
@@ -207,7 +214,11 @@ export default function ReelModal({
         {/* Top Header Bar */}
         <div className="flex items-center justify-between px-3.5 py-2.5 sm:px-4 sm:py-3 bg-neutral-900/90 border-b border-white/10 backdrop-blur-md">
           <div className="flex items-center gap-2 min-w-0 pr-2">
-            {isInsta ? (
+            {isDirect ? (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white shrink-0 text-xs shadow-md">
+                <Film size={12} />
+              </span>
+            ) : isInsta ? (
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-amber-500 via-pink-600 to-purple-600 text-white shrink-0 text-xs shadow-md">
                 <FaInstagram size={13} />
               </span>
@@ -255,14 +266,27 @@ export default function ReelModal({
 
         {/* Video Player Frame with 9:16 vertical ratio */}
         <div className="relative aspect-[9/16] w-full bg-black flex items-center justify-center overflow-hidden">
-          <iframe
-            key={`iframe-${currentReel.id}`}
-            src={embedUrl}
-            title={currentReel.title}
-            className="w-full h-full border-0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
+          {isDirect ? (
+            <video
+              key={`video-${currentReel.id}`}
+              src={currentReel.video_url}
+              poster={currentReel.thumbnail_url || undefined}
+              controls
+              autoPlay
+              playsInline
+              loop
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <iframe
+              key={`iframe-${currentReel.id}`}
+              src={embedUrl}
+              title={currentReel.title}
+              className="w-full h-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          )}
         </div>
 
         {/* Mobile Navigation Micro-Bar (when more than 1 reel) */}
@@ -293,16 +317,22 @@ export default function ReelModal({
         {/* Bottom Footer Bar */}
         <div className="px-4 py-2.5 bg-neutral-900/90 border-t border-white/10 flex items-center justify-between text-[11px] text-white/80 backdrop-blur-md">
           <span className="flex items-center gap-1 font-semibold text-emerald-400">
-            <Sparkles size={11} /> SFC Bakers Originals
+            <Sparkles size={11} /> {isDirect ? "Direct HD Video" : "SFC Bakers Originals"}
           </span>
-          <a
-            href={currentReel.video_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-bold text-[var(--color-primary)] hover:underline inline-flex items-center gap-1"
-          >
-            Watch on {isInsta ? "Instagram" : "YouTube"} →
-          </a>
+          {isDirect ? (
+            <span className="font-semibold text-emerald-400/90 flex items-center gap-1">
+              ✓ Playing In-App (No Redirects)
+            </span>
+          ) : (
+            <a
+              href={currentReel.video_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-[var(--color-primary)] hover:underline inline-flex items-center gap-1"
+            >
+              Watch on {isInsta ? "Instagram" : "YouTube"} →
+            </a>
+          )}
         </div>
       </div>
     </div>,

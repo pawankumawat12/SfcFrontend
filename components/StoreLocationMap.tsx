@@ -194,10 +194,10 @@ export default function StoreLocationMap({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-stone-900 shadow-md ${className}`}
+      className={`relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-stone-900 shadow-md isolate ${className}`}
     >
       {/* Floating Map Mode Toggle */}
-      <div className="absolute right-3 top-3 z-[1000] flex items-center overflow-hidden rounded-xl border border-white/20 bg-black/60 p-0.5 shadow-lg backdrop-blur-md">
+      <div className="absolute right-3 top-3 z-10 flex items-center overflow-hidden rounded-xl border border-white/20 bg-black/60 p-0.5 shadow-lg backdrop-blur-md">
         <button
           type="button"
           onClick={() => switchTileLayer("satellite")}

@@ -816,7 +816,7 @@ export default function CustomerLocationPicker({
 
         {/* Live Swiggy-Style Suggestions Dropdown */}
         {showResultsDropdown && searchResults.length > 0 && (
-          <div className="absolute left-0 right-0 top-full z-[1100] mt-1.5 max-h-56 overflow-y-auto rounded-2xl border border-stone-200 bg-white p-1.5 shadow-xl">
+          <div className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-56 overflow-y-auto rounded-2xl border border-stone-200 bg-white p-1.5 shadow-xl">
             <div className="mb-1 flex items-center justify-between border-b border-stone-100 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider text-stone-400">
               <span>Matching Locations (Select one)</span>
               <button
@@ -853,14 +853,14 @@ export default function CustomerLocationPicker({
 
       {/* Map Container */}
       <div
-        className="relative overflow-hidden rounded-xl border border-stone-300 shadow-inner"
+        className="relative overflow-hidden rounded-xl border border-stone-300 shadow-inner isolate"
         style={{ height: "260px" }}
       >
         <div ref={mapContainerRef} style={{ height: "100%", width: "100%", zIndex: 1 }} />
 
         {/* Floating loading overlay when geocoding is active */}
         {geocoding && (
-          <div className="absolute inset-x-0 top-3 z-[1000] flex justify-center px-3 pointer-events-none">
+          <div className="absolute inset-x-0 top-3 z-10 flex justify-center px-3 pointer-events-none">
             <div className="flex items-center gap-2 rounded-full bg-stone-900/90 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur-xs animate-pulse border border-stone-700">
               <Loader2 size={13} className="animate-spin text-amber-400" />
               <span>Fetching exact address for pinned location...</span>
@@ -869,7 +869,7 @@ export default function CustomerLocationPicker({
         )}
 
         {/* Satellite/Street floating pill */}
-        <div className="pointer-events-none absolute right-2.5 top-2.5 z-[1000] flex items-center gap-1 rounded-full bg-black/65 px-2.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-xs">
+        <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-full bg-black/65 px-2.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-xs">
           <span
             className={`h-1.5 w-1.5 rounded-full ${
               mapType === "satellite" ? "bg-emerald-400" : "bg-sky-400"
