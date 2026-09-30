@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
+import ReelsSlider from "./ReelsSlider";
 
 import {
   useGetStoreCategoriesQuery,
@@ -58,43 +59,6 @@ function formatRupee(v: number) {
   return Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 }
 
-export function getProductDietaryType(product: any): "veg" | "eggless" | "non-veg" {
-  if (product?.dietary_type) {
-    const dt = String(product.dietary_type).toLowerCase();
-    if (dt.includes("eggless")) return "eggless";
-    if (dt.includes("non") || dt.includes("meat") || dt.includes("chicken")) return "non-veg";
-    if (dt.includes("veg")) return "veg";
-  }
-
-  if (product?.is_veg === false) return "non-veg";
-
-  const text = `${product?.name || ""} ${product?.description || ""} ${product?.category_name || ""}`.toLowerCase();
-
-  if (
-    text.includes("chicken") ||
-    text.includes("mutton") ||
-    text.includes("fish") ||
-    text.includes("prawn") ||
-    text.includes("meat") ||
-    text.includes("egg wrap") ||
-    text.includes("egg roll") ||
-    text.includes("non-veg") ||
-    text.includes("non veg")
-  ) {
-    return "non-veg";
-  }
-
-  if (
-    text.includes("eggless") ||
-    text.includes("egg-less") ||
-    text.includes("pure veg cake")
-  ) {
-    return "eggless";
-  }
-
-  return "veg";
-}
-
 const EMPTY_CATEGORIES: never[] = [];
 const EMPTY_PRODUCTS: never[] = [];
 
@@ -103,12 +67,13 @@ export default function Menu() {
     (state: { auth: { user: any | null } }) => state.auth.user
   );
   const searchParams = useSearchParams();
-  const urlStoreId = searchParams?.get("store_id") || searchParams?.get("storeId");
+  const urlStoreId =
+    searchParams?.get("store_id") || searchParams?.get("storeId");
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
 
   // Search and Dietary filter states
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [dietaryFilter, setDietaryFilter] = useState<"all" | "veg" | "eggless" | "non-veg">("all");
+
 
   useEffect(() => {
     if (urlStoreId) {
@@ -131,9 +96,15 @@ export default function Menu() {
         setSelectedStoreId(null);
       }
     };
-    window.addEventListener("sfc_delivery_location_changed", handleLocationChange);
+    window.addEventListener(
+      "sfc_delivery_location_changed",
+      handleLocationChange
+    );
     return () => {
-      window.removeEventListener("sfc_delivery_location_changed", handleLocationChange);
+      window.removeEventListener(
+        "sfc_delivery_location_changed",
+        handleLocationChange
+      );
     };
   }, [urlStoreId]);
 
@@ -185,31 +156,42 @@ export default function Menu() {
   const cartItemsMap = useMemo(() => {
     if (user) {
       return new Map(
-        (cartResponse?.data?.items || []).map((it) => [Number(it.id), it.quantity])
+        (cartResponse?.data?.items || []).map((it) => [
+          Number(it.id),
+          it.quantity,
+        ])
       );
     }
-    return new Map(guestCartItems.map((it) => [Number(it.productId), it.quantity]));
+    return new Map(
+      guestCartItems.map((it) => [Number(it.productId), it.quantity])
+    );
   }, [user, cartResponse, guestCartItems]);
 
   const guestSummary = useMemo(() => {
     const totalItems = guestCartItems.reduce((sum, it) => sum + it.quantity, 0);
     const allProducts = productResponse?.data || [];
     const grandTotal = guestCartItems.reduce((sum, it) => {
-      const prod = allProducts.find((p: any) => Number(p.id) === Number(it.productId));
+      const prod = allProducts.find(
+        (p: any) => Number(p.id) === Number(it.productId)
+      );
       return sum + (prod ? Number(prod.price) * it.quantity : 0);
     }, 0);
     return { totalItems, grandTotal };
   }, [guestCartItems, productResponse]);
 
   const cartSummary = user
-    ? (cartResponse?.data?.summary || { totalItems: 0, grandTotal: 0 })
+    ? cartResponse?.data?.summary || { totalItems: 0, grandTotal: 0 }
     : guestSummary;
 
   const { data: offersData = [] } = useGetOffersQuery();
   const bogoOffersMap = useMemo(() => {
     const map = new Map<number, any>();
     for (const offer of offersData || []) {
-      if (offer.is_active && offer.type === "BOGO" && Array.isArray(offer.target_product_ids)) {
+      if (
+        offer.is_active &&
+        offer.type === "BOGO" &&
+        Array.isArray(offer.target_product_ids)
+      ) {
         for (const pId of offer.target_product_ids) {
           map.set(Number(pId), offer);
         }
@@ -226,7 +208,10 @@ export default function Menu() {
     [wishlistData]
   );
 
-  const handleToggleWishlist = async (productId: number, e: React.MouseEvent) => {
+  const handleToggleWishlist = async (
+    productId: number,
+    e: React.MouseEvent
+  ) => {
     e.preventDefault();
     e.stopPropagation();
     if (!user) {
@@ -245,7 +230,11 @@ export default function Menu() {
     }
   };
 
-  const handleAddToCart = async (productId: number, stock: number, isMadeToOrder?: boolean) => {
+  const handleAddToCart = async (
+    productId: number,
+    stock: number,
+    isMadeToOrder?: boolean
+  ) => {
     if (!isMadeToOrder && stock <= 0) {
       toast.error("Product is out of stock");
       return;
@@ -265,7 +254,9 @@ export default function Menu() {
       await addCartItem({ productId, quantity: 1 }).unwrap();
       toast.success("Added to cart");
     } catch (err: any) {
-      toast.error(err?.data?.message || "This product is not available right now.");
+      toast.error(
+        err?.data?.message || "This product is not available right now."
+      );
     }
   };
 
@@ -285,7 +276,12 @@ export default function Menu() {
       }
 
       if (!user) {
-        const res = updateGuestCartItemQty(productId, nextQty, maxStock, isMadeToOrder);
+        const res = updateGuestCartItemQty(
+          productId,
+          nextQty,
+          maxStock,
+          isMadeToOrder
+        );
         if (res.success) {
           if (nextQty === 0) {
             toast.success("Removed from cart");
@@ -321,39 +317,29 @@ export default function Menu() {
   const visibleProducts = useMemo(() => {
     return products.filter((p: any) => {
       // 1. Dietary filter
-      if (dietaryFilter !== "all") {
-        const itemType = getProductDietaryType(p);
-        if (dietaryFilter === "veg") {
-          if (itemType === "non-veg") return false;
-        } else if (dietaryFilter === "eggless") {
-          if (itemType !== "eggless") return false;
-        } else if (dietaryFilter === "non-veg") {
-          if (itemType !== "non-veg") return false;
-        }
-      }
+      
 
       // 2. Search query filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const nameMatch = (p.name || "").toLowerCase().includes(q);
         const descMatch = (p.description || "").toLowerCase().includes(q);
-        const catMatch = (p.category_name || p.categoryName || "").toLowerCase().includes(q);
+        const catMatch = (p.category_name || p.categoryName || "")
+          .toLowerCase()
+          .includes(q);
         if (!nameMatch && !descMatch && !catMatch) return false;
       }
 
       return true;
     });
-  }, [products, dietaryFilter, searchQuery]);
+  }, [products,  searchQuery]);
 
   // pagination via infinite scroll
-  const totalPages = Math.max(
-    1,
-    Math.ceil(visibleProducts.length / pageSize)
-  );
+  const totalPages = Math.max(1, Math.ceil(visibleProducts.length / pageSize));
 
   useEffect(() => {
     setPage(1);
-  }, [selected, searchQuery, dietaryFilter]);
+  }, [selected, searchQuery]);
 
   useEffect(() => {
     const cat = searchParams?.get("category");
@@ -407,9 +393,9 @@ export default function Menu() {
     items.forEach((el) => observer.observe(el));
 
     return () => observer.disconnect();
-  // Re-run after the API response adds product cards to the DOM. Previously this
-  // ran before the first response arrived, so the cards kept their hidden
-  // pre-animation state until a category/page change.
+    // Re-run after the API response adds product cards to the DOM. Previously this
+    // ran before the first response arrived, so the cards kept their hidden
+    // pre-animation state until a category/page change.
   }, [pagedProducts]);
 
   // sentinel for infinite loading
@@ -452,7 +438,6 @@ export default function Menu() {
         <div className="pointer-events-none absolute right-[20%] top-1/2 h-20 w-20 rounded-full bg-white/[0.03]" />
         <div className="relative mx-auto max-w-7xl px-4 py-10 md:px-8 md:py-14">
           <div className="max-w-3xl">
-
             <div
               className="
                 mb-5
@@ -503,16 +488,14 @@ export default function Menu() {
                 md:text-base
               "
             >
-              Explore our freshly prepared favorites, made with
-              quality ingredients and served with great taste.
+              Explore our freshly prepared favorites, made with quality
+              ingredients and served with great taste.
             </p>
-
           </div>
 
           {/* Hero quick stats */}
 
           <div className="mt-8 flex flex-wrap gap-2">
-
             <div className="rounded-full border border-white/10 bg-white/10 px-4 py-2 backdrop-blur">
               <span className="flex items-center gap-1.5 text-xs font-bold text-white">
                 <Utensils size={13} /> Freshly Prepared
@@ -530,9 +513,7 @@ export default function Menu() {
                 <Heart size={13} /> Customer Favorites
               </span>
             </div>
-
           </div>
-
         </div>
       </section>
       <section
@@ -587,7 +568,6 @@ export default function Menu() {
             scrollbar-x
             "
           >
-
             {/* ALL */}
 
             <button
@@ -615,7 +595,6 @@ export default function Menu() {
               `}
             >
               <Utensils size={15} />
-
               All
             </button>
 
@@ -676,7 +655,6 @@ export default function Menu() {
                 </button>
               ))
             )}
-
           </div>
         </div>
       </section>
@@ -685,10 +663,7 @@ export default function Menu() {
         ref={gridRef}
         className="mx-auto max-w-7xl scroll-mt-20 px-4 md:px-8"
       >
-
-
         <section className="py-7 md:py-9">
-
           <div
             className="
               grid
@@ -704,7 +679,6 @@ export default function Menu() {
               md:p-3
             "
           >
-
             <div
               className="
                 rounded-xl
@@ -761,19 +735,13 @@ export default function Menu() {
                 Made With Care
               </p>
             </div>
-
           </div>
-
         </section>
 
         <section className="pb-5">
-
           <div className="flex items-end justify-between gap-4">
-
             <div>
-
               <div className="flex items-center gap-2">
-
                 <span className="h-2 w-2 rounded-full bg-[var(--color-secondary)]" />
 
                 <span
@@ -787,7 +755,6 @@ export default function Menu() {
                 >
                   Freshly Prepared
                 </span>
-
               </div>
 
               <h2
@@ -806,7 +773,6 @@ export default function Menu() {
               <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                 {visibleProducts.length} delicious items
               </p>
-
             </div>
 
             <div
@@ -827,16 +793,10 @@ export default function Menu() {
                 sm:flex
               "
             >
-              <Flame
-                size={15}
-                className="text-[var(--color-secondary)]"
-              />
-
+              <Flame size={15} className="text-[var(--color-secondary)]" />
               Customer Favorites
             </div>
-
           </div>
-
         </section>
         <section>
           {isProductsLoading ? (
@@ -851,7 +811,9 @@ export default function Menu() {
                 {searchQuery ? <Search size={28} /> : <ShoppingBag size={28} />}
               </div>
               <h3 className="text-lg font-black text-[var(--color-text-primary)]">
-                {searchQuery ? "No matching items found" : "No items in this category yet"}
+                {searchQuery
+                  ? "No matching items found"
+                  : "No items in this category yet"}
               </h3>
               <p className="mt-1 max-w-sm text-xs text-[var(--color-text-muted)]">
                 {searchQuery
@@ -891,18 +853,19 @@ export default function Menu() {
               "
             >
               {pagedProducts.map((p, index) => {
-              const inCartQty = cartItemsMap.get(Number(p.id)) || 0;
-              const inCart = inCartQty > 0;
-              const isMadeToOrder = Boolean(
-                p.isMadeToOrder ||
-                String(p.availability_type || "").toUpperCase() === "MADE_TO_ORDER"
-              );
-              const outOfStock = !isMadeToOrder && Number(p.stock) <= 0;
+                const inCartQty = cartItemsMap.get(Number(p.id)) || 0;
+                const inCart = inCartQty > 0;
+                const isMadeToOrder = Boolean(
+                  p.isMadeToOrder ||
+                    String(p.availability_type || "").toUpperCase() ===
+                      "MADE_TO_ORDER"
+                );
+                const outOfStock = !isMadeToOrder && Number(p.stock) <= 0;
 
-              return (
-                <article
-                  key={p.id}
-                  className="
+                return (
+                  <article
+                    key={p.id}
+                    className="
                     product-card
                     group
                     flex
@@ -920,43 +883,37 @@ export default function Menu() {
                     hover:-translate-y-1
                     hover:shadow-lg
                   "
-                >
-
-                  <div className="relative aspect-square sm:aspect-[4/3] w-full overflow-hidden bg-[var(--bg-muted)]">
-
-                    <Link
-                      href={`/product/${p.id}`}
-                      className="relative block h-full w-full overflow-hidden"
-                    >
-                      {p.img ? (
-                        <Image
-                          src={p.img}
-                          alt={p.name}
-                          fill
-                          unoptimized
-                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
-                          className="
+                  >
+                    <div className="relative aspect-square sm:aspect-[4/3] w-full overflow-hidden bg-[var(--bg-muted)]">
+                      <Link
+                        href={`/product/${p.id}`}
+                        className="relative block h-full w-full overflow-hidden"
+                      >
+                        {p.img ? (
+                          <Image
+                            src={p.img}
+                            alt={p.name}
+                            fill
+                            unoptimized
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
+                            className="
                             object-cover
                             transition-transform
                             duration-500
                             group-hover:scale-105
                           "
-                        />
-                      ) : (
-                        <div className="h-full w-full bg-stone-100 flex items-center justify-center text-stone-400">
-                          <span className="text-xs">No image</span>
-                        </div>
-                      )}
-                    </Link>
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-stone-100 flex items-center justify-center text-stone-400">
+                            <span className="text-xs">No image</span>
+                          </div>
+                        )}
+                      </Link>
 
-                
+                      {/* Image gradient */}
 
-                  
-
-                    {/* Image gradient */}
-
-                    <div
-                      className="
+                      <div
+                        className="
                         pointer-events-none
                         absolute
                         inset-x-0
@@ -966,13 +923,13 @@ export default function Menu() {
                         from-black/35
                         to-transparent
                       "
-                    />
+                      />
 
-                    {/* Popular */}
+                      {/* Popular */}
 
-                    {index < 2 && (
-                      <div
-                        className="
+                      {index < 2 && (
+                        <div
+                          className="
                           absolute
                           left-2
                           top-2
@@ -989,42 +946,44 @@ export default function Menu() {
                           text-white
                           shadow-lg
                         "
-                      >
-                        <Flame size={11} />
-
-                        Popular
-                      </div>
-                    )}
-
-                    {/* Applicable Offer Badge */}
-                    {(() => {
-                      const offer = getProductPrimaryOffer(p, offersData);
-                      if (!offer) return null;
-                      const badgeText = formatOfferBadge(offer);
-                      const isProductSpecific =
-                        offer.is_product_specific ||
-                        (Array.isArray(offer.target_product_ids) &&
-                          offer.target_product_ids.map(Number).includes(Number(p.id)));
-
-                      return (
-                        <div
-                          className={`absolute left-2 bottom-2 z-10 flex items-center gap-1 rounded-full px-2.5 py-1 text-[8.5px] font-black uppercase tracking-wide text-white shadow-md backdrop-blur-xs ${
-                            isProductSpecific ? "bg-amber-500" : "bg-emerald-600"
-                          }`}
                         >
-                          <Gift size={10} />
-                          {badgeText}
+                          <Flame size={11} />
+                          Popular
                         </div>
-                      );
-                    })()}
+                      )}
 
+                      {/* Applicable Offer Badge */}
+                      {(() => {
+                        const offer = getProductPrimaryOffer(p, offersData);
+                        if (!offer) return null;
+                        const badgeText = formatOfferBadge(offer);
+                        const isProductSpecific =
+                          offer.is_product_specific ||
+                          (Array.isArray(offer.target_product_ids) &&
+                            offer.target_product_ids
+                              .map(Number)
+                              .includes(Number(p.id)));
 
-                    {/* Wishlist Toggle Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleWishlist(p.id, e)}
-                      aria-label="Save to favorites"
-                      className="
+                        return (
+                          <div
+                            className={`absolute left-2 bottom-2 z-10 flex items-center gap-1 rounded-full px-2.5 py-1 text-[8.5px] font-black uppercase tracking-wide text-white shadow-md backdrop-blur-xs ${
+                              isProductSpecific
+                                ? "bg-amber-500"
+                                : "bg-emerald-600"
+                            }`}
+                          >
+                            <Gift size={10} />
+                            {badgeText}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Wishlist Toggle Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleWishlist(p.id, e)}
+                        aria-label="Save to favorites"
+                        className="
                         absolute
                         right-2
                         top-2
@@ -1042,20 +1001,20 @@ export default function Menu() {
                         hover:scale-110
                         active:scale-95
                       "
-                    >
-                      <Heart
-                        size={15}
-                        className={
-                          wishlistedIds.has(p.id)
-                            ? "fill-red-500 text-red-500"
-                            : "text-stone-600 hover:text-red-400"
-                        }
-                      />
-                    </button>
+                      >
+                        <Heart
+                          size={15}
+                          className={
+                            wishlistedIds.has(p.id)
+                              ? "fill-red-500 text-red-500"
+                              : "text-stone-600 hover:text-red-400"
+                          }
+                        />
+                      </button>
 
-                    {/* Category */}
-                    <div
-                      className="
+                      {/* Category */}
+                      <div
+                        className="
                         absolute
                         left-2
                         bottom-2
@@ -1071,48 +1030,23 @@ export default function Menu() {
                         text-white
                         backdrop-blur-md
                       "
-                      title={p.categoryName}
-                    >
-                      {p.categoryName}
+                        title={p.categoryName}
+                      >
+                        {p.categoryName}
+                      </div>
                     </div>
 
-                  </div>
-
-                  {/* =================================================
+                    {/* =================================================
                       PRODUCT INFO
                   ================================================= */}
 
-                  <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
-                    <div>
-                      <Link
-                        href={`/product/${p.id}`}
-                        className="block"
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {(() => {
-                            const dietary = getProductDietaryType(p);
-                            if (dietary === "veg") {
-                              return (
-                                <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-xs border border-emerald-600 p-[1.5px]" title="Vegetarian">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                                </span>
-                              );
-                            }
-                            if (dietary === "eggless") {
-                              return (
-                                <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-xs border border-amber-500 p-[1.5px]" title="Eggless Bakery">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-xs border border-rose-600 p-[1.5px]" title="Non-Vegetarian">
-                                <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
-                              </span>
-                            );
-                          })()}
-                          <h3
-                            className="
+                    <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
+                      <div>
+                        <Link href={`/product/${p.id}`} className="block">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                     
+                            <h3
+                              className="
                               line-clamp-1
                               text-xs
                               font-black
@@ -1122,14 +1056,14 @@ export default function Menu() {
                               sm:text-base
                               break-words
                             "
-                            title={p.name}
-                          >
-                            {p.name}
-                          </h3>
-                        </div>
+                              title={p.name}
+                            >
+                              {p.name}
+                            </h3>
+                          </div>
 
-                        <p
-                          className="
+                          <p
+                            className="
                             mt-1
                             line-clamp-2
                             min-h-[28px]
@@ -1141,18 +1075,19 @@ export default function Menu() {
                             sm:text-xs
                             break-words
                           "
-                          title={p.description || `Handcrafted — ${p.categoryName}`}
-                        >
-                          {p.description || `Handcrafted — ${p.categoryName}`}
-                        </p>
-                      </Link>
+                            title={
+                              p.description || `Handcrafted — ${p.categoryName}`
+                            }
+                          >
+                            {p.description || `Handcrafted — ${p.categoryName}`}
+                          </p>
+                        </Link>
 
-                      {/* Dynamic Rating & Review Count */}
+                        {/* Dynamic Rating & Review Count */}
 
-                      <div className="mt-2.5 flex items-center gap-1.5">
-
-                        <div
-                          className="
+                        <div className="mt-2.5 flex items-center gap-1.5">
+                          <div
+                            className="
                             flex
                             items-center
                             gap-1
@@ -1161,51 +1096,49 @@ export default function Menu() {
                             px-2
                             py-0.5
                           "
-                        >
-                          <Star
-                            size={10}
-                            fill="currentColor"
-                            className="text-[var(--color-star)]"
-                          />
+                          >
+                            <Star
+                              size={10}
+                              fill="currentColor"
+                              className="text-[var(--color-star)]"
+                            />
 
-                          <span className="text-[10px] font-black text-[var(--color-text-primary)]">
-                            {Number(p.total_reviews || 0) > 0 && Number(p.rating || 0) > 0
-                              ? Number(p.rating).toFixed(1)
-                              : "New"}
+                            <span className="text-[10px] font-black text-[var(--color-text-primary)]">
+                              {Number(p.total_reviews || 0) > 0 &&
+                              Number(p.rating || 0) > 0
+                                ? Number(p.rating).toFixed(1)
+                                : "New"}
+                            </span>
+                          </div>
+
+                          <span className="text-[9px] sm:text-[10px] font-medium text-[var(--color-text-muted)]">
+                            ({Number(p.total_reviews || 0)})
                           </span>
                         </div>
-
-                        <span className="text-[9px] sm:text-[10px] font-medium text-[var(--color-text-muted)]">
-                          ({Number(p.total_reviews || 0)})
-                        </span>
-
-                      </div>
-                    </div>
-
-                    {/* Price + Cart */}
-
-                    <div className="mt-3 sm:mt-4">
-                      <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)]/50 pt-2.5">
-
-                        <div>
-                          <p className="text-[8px] sm:text-[9px] font-medium text-[var(--color-text-muted)]">
-                            Price
-                          </p>
-
-                          <div className="text-sm font-black text-[var(--color-text-primary)] sm:text-base">
-                          ₹{formatRupee(p.price)}
-                        </div>
                       </div>
 
-                      {/* =================================================
+                      {/* Price + Cart */}
+
+                      <div className="mt-3 sm:mt-4">
+                        <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)]/50 pt-2.5">
+                          <div>
+                            <p className="text-[8px] sm:text-[9px] font-medium text-[var(--color-text-muted)]">
+                              Price
+                            </p>
+
+                            <div className="text-sm font-black text-[var(--color-text-primary)] sm:text-base">
+                              ₹{formatRupee(p.price)}
+                            </div>
+                          </div>
+
+                          {/* =================================================
                           AUTHENTICATED CART CONTROLS
                       ================================================= */}
 
-                      {inCart ? (
-
-                        <div className="flex flex-col items-end gap-1">
-                          <div
-                            className="
+                          {inCart ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <div
+                                className="
                               flex
                               items-center
                               gap-1
@@ -1215,20 +1148,19 @@ export default function Menu() {
                               ring-1
                               ring-[var(--color-primary)]/10
                             "
-                          >
-
-                            <button
-                              type="button"
-                              aria-label="Decrease quantity"
-                              onClick={() =>
-                                handleChangeQty(
-                                  p.id,
-                                  inCartQty - 1,
-                                  Number(p.stock),
-                                  isMadeToOrder
-                                )
-                              }
-                              className="
+                              >
+                                <button
+                                  type="button"
+                                  aria-label="Decrease quantity"
+                                  onClick={() =>
+                                    handleChangeQty(
+                                      p.id,
+                                      inCartQty - 1,
+                                      Number(p.stock),
+                                      isMadeToOrder
+                                    )
+                                  }
+                                  className="
                                 flex
                                 h-7
                                 w-7
@@ -1241,36 +1173,44 @@ export default function Menu() {
                                 transition
                                 active:scale-90
                               "
-                            >
-                              <Minus size={13} strokeWidth={3} />
-                            </button>
+                                >
+                                  <Minus size={13} strokeWidth={3} />
+                                </button>
 
-                            <div
-                              className="
+                                <div
+                                  className="
                                 min-w-[22px]
                                 text-center
                                 text-xs
                                 font-black
                                 text-[var(--color-primary)]
                               "
-                            >
-                              {inCartQty}
-                            </div>
+                                >
+                                  {inCartQty}
+                                </div>
 
-                            <button
-                              type="button"
-                              aria-label="Increase quantity"
-                              title={!isMadeToOrder && inCartQty >= Number(p.stock) ? `Only ${p.stock} items available in stock` : "Increase quantity"}
-                              disabled={!isMadeToOrder && inCartQty >= Number(p.stock)}
-                              onClick={() =>
-                                handleChangeQty(
-                                  p.id,
-                                  inCartQty + 1,
-                                  Number(p.stock),
-                                  isMadeToOrder
-                                )
-                              }
-                              className="
+                                <button
+                                  type="button"
+                                  aria-label="Increase quantity"
+                                  title={
+                                    !isMadeToOrder &&
+                                    inCartQty >= Number(p.stock)
+                                      ? `Only ${p.stock} items available in stock`
+                                      : "Increase quantity"
+                                  }
+                                  disabled={
+                                    !isMadeToOrder &&
+                                    inCartQty >= Number(p.stock)
+                                  }
+                                  onClick={() =>
+                                    handleChangeQty(
+                                      p.id,
+                                      inCartQty + 1,
+                                      Number(p.stock),
+                                      isMadeToOrder
+                                    )
+                                  }
+                                  className="
                                 flex
                                 h-7
                                 w-7
@@ -1285,34 +1225,38 @@ export default function Menu() {
                                 disabled:opacity-40
                                 active:scale-90
                               "
-                            >
-                              <Plus size={13} strokeWidth={3} />
-                            </button>
+                                >
+                                  <Plus size={13} strokeWidth={3} />
+                                </button>
+                              </div>
 
-                          </div>
-
-                          {!isMadeToOrder && inCartQty >= Number(p.stock) && (
-                            <span className="text-[9px] font-bold text-amber-600">
-                              Max ({p.stock})
-                            </span>
-                          )}
-                          {/* {isMadeToOrder && (
+                              {!isMadeToOrder &&
+                                inCartQty >= Number(p.stock) && (
+                                  <span className="text-[9px] font-bold text-amber-600">
+                                    Max ({p.stock})
+                                  </span>
+                                )}
+                              {/* {isMadeToOrder && (
                             <span className="text-[9px] font-bold text-orange-600">
                               Fresh Order
                             </span>
                           )} */}
-                        </div>
-
-                      ) : outOfStock ? (
-                        <span className="rounded-full bg-[var(--color-text-muted)] px-3.5 py-2 text-[10px] font-black text-white">
-                          Out of stock
-                        </span>
-                      ) : (
-
-                        <button
-                          type="button"
-                          onClick={() => handleAddToCart(p.id, Number(p.stock), isMadeToOrder)}
-                          className="
+                            </div>
+                          ) : outOfStock ? (
+                            <span className="rounded-full bg-[var(--color-text-muted)] px-3.5 py-2 text-[10px] font-black text-white">
+                              Out of stock
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAddToCart(
+                                  p.id,
+                                  Number(p.stock),
+                                  isMadeToOrder
+                                )
+                              }
+                              className="
                             flex
                             h-9
                             items-center
@@ -1333,23 +1277,18 @@ export default function Menu() {
                             sm:px-4
                             sm:text-xs
                           "
-                        >
-                          <Plus
-                            size={14}
-                            strokeWidth={3}
-                          />
+                            >
+                              <Plus size={14} strokeWidth={3} />
+                              Add
+                            </button>
+                          )}
+                        </div>
 
-                          Add
-                        </button>
-                      )}
+                        {/* Details */}
 
-                    </div>
-
-                    {/* Details */}
-
-                    <Link
-                      href={`/product/${p.id}`}
-                      className="
+                        <Link
+                          href={`/product/${p.id}`}
+                          className="
                         mt-3
                         flex
                         items-center
@@ -1363,36 +1302,30 @@ export default function Menu() {
                         transition-colors
                         hover:text-[var(--color-primary)]
                       "
-                    >
-                      <span>View details</span>
+                        >
+                          <span>View details</span>
 
-                      <ChevronRight size={13} />
-
-                    </Link>
-
-                  </div>
-
-                </div>
-
-                </article>
-              );
-            })}
-
-          </div>
+                          <ChevronRight size={13} />
+                        </Link>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           )}
 
-     
-          <div
-            ref={sentinelRef}
-            className="h-8"
-          />
-
+          <div ref={sentinelRef} className="h-8" />
         </section>
-
       </div>
 
-    
-
+      {/* VIRAL REELS & VIDEO STORIES */}
+      <ReelsSlider
+        variant="menu"
+        title="Baking Stories & Viral Treats"
+        subtitle="Watch our fresh oven bakes and creative cake recipes in action!"
+        className="pb-12"
+      />
     </main>
   );
 }

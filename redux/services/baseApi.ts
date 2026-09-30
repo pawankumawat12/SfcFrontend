@@ -160,6 +160,7 @@ export const baseApi = createApi({
     "Testimonials",
     "Notification",
     "CmsPages",
+    "Reels",
   ],
   endpoints: () => ({}),
 });

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useSelector } from "react-redux";
-import { Utensils, ChevronRight, Star, Plus, Check, Gift } from "lucide-react";
+import { Utensils, ChevronRight, Star, Plus, Check, Gift, Heart } from "lucide-react";
 import toast from "react-hot-toast";
 import { useGetStoreProductsQuery } from "../redux/services/catalogApi";
 import { useGetOffersQuery } from "../redux/services/offerApi";
@@ -13,6 +13,10 @@ import {
   useGetCartQuery,
   useAddCartItemMutation,
 } from "../redux/services/cartApi";
+import {
+  useGetWishlistQuery,
+  useToggleWishlistMutation,
+} from "../redux/services/wishlistApi";
 import {
   getGuestCart,
   addGuestCartItem,
@@ -40,6 +44,11 @@ export default function PairItWithSection({
     skip: !user,
   });
   const [addCartItem] = useAddCartItemMutation();
+
+  const { data: wishlistData } = useGetWishlistQuery(undefined, {
+    skip: !user,
+  });
+  const [toggleWishlist] = useToggleWishlistMutation();
 
   const [guestCartItems, setGuestCartItems] = useState<GuestCartItem[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
@@ -111,6 +120,33 @@ export default function PairItWithSection({
     }
     const item = guestCartItems.find((c) => Number(c.productId) === id);
     return item ? item.quantity : 0;
+  };
+
+  const isProductWishlisted = (id: number) => {
+    return Boolean(
+      (wishlistData?.data || []).some(
+        (w: any) => Number(w.id || w.product_id) === id
+      )
+    );
+  };
+
+  const handleToggleWishlist = async (pid: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) {
+      window.dispatchEvent(new CustomEvent("sfc_open_login"));
+      return;
+    }
+    try {
+      const res = await toggleWishlist({ productId: pid }).unwrap();
+      if (res.inWishlist) {
+        toast.success("Added to favorites");
+      } else {
+        toast.success("Removed from favorites");
+      }
+    } catch {
+      toast.error("Failed to update favorites");
+    }
   };
 
   const handleAddToCart = async (product: any, e: React.MouseEvent) => {
@@ -193,6 +229,7 @@ export default function PairItWithSection({
           );
           const isOut = !isMadeToOrder && Number(rel.stock) <= 0;
           const inCartCount = getInCartQty(Number(rel.id));
+          const isFav = isProductWishlisted(Number(rel.id));
           const displayImg = toAssetUrl(
             (Array.isArray(rel.images) && rel.images[0]) ||
             rel.img ||
@@ -220,29 +257,31 @@ export default function PairItWithSection({
               key={rel.id}
               className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white shadow-xs transition hover:-translate-y-1 hover:shadow-lg"
             >
-              <Link
-                href={`/product/${rel.id}`}
-                className="relative block h-44 w-full overflow-hidden bg-stone-100"
-              >
-                {displayImg ? (
-                  <Image
-                    src={displayImg}
-                    alt={rel.name}
-                    fill
-                    unoptimized
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-stone-400 text-xs font-semibold">
-                    No image
-                  </div>
-                )}
-                {isOut && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-black uppercase text-white backdrop-blur-[2px]">
-                    Out of Stock
-                  </div>
-                )}
+              <div className="relative h-44 w-full overflow-hidden bg-stone-100">
+                <Link
+                  href={`/product/${rel.id}`}
+                  className="block h-full w-full"
+                >
+                  {displayImg ? (
+                    <Image
+                      src={displayImg}
+                      alt={rel.name}
+                      fill
+                      unoptimized
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-stone-400 text-xs font-semibold">
+                      No image
+                    </div>
+                  )}
+                  {isOut && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-black uppercase text-white backdrop-blur-[2px]">
+                      Out of Stock
+                    </div>
+                  )}
+                </Link>
 
                 {/* Applicable Offer Badge on Image */}
                 {offer && (
@@ -257,13 +296,30 @@ export default function PairItWithSection({
                     <span>{badgeText}</span>
                   </div>
                 )}
-                
+
+                {/* Wishlist Button */}
+                <button
+                  type="button"
+                  onClick={(e) => handleToggleWishlist(Number(rel.id), e)}
+                  aria-label="Save to favorites"
+                  className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition hover:scale-110 active:scale-95"
+                >
+                  <Heart
+                    size={15}
+                    className={
+                      isFav
+                        ? "fill-red-500 text-red-500"
+                        : "text-stone-500 hover:text-red-500"
+                    }
+                  />
+                </button>
+
                 {(rel.categoryName || rel.category_name) && (
                   <div className="absolute left-2.5 bottom-2.5 rounded-full bg-black/60 px-2.5 py-0.5 text-[9px] font-bold text-white backdrop-blur-xs">
                     {rel.categoryName || rel.category_name}
                   </div>
                 )}
-              </Link>
+              </div>
 
               <div className="flex flex-1 flex-col justify-between p-4">
                 <div>
