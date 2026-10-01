@@ -57,6 +57,8 @@ interface OrderDetailsModalProps {
   onOpenChat?: (order: any) => void;
   onRetryPayment?: (order: any) => void;
   retryingOrderId?: number | null;
+  onReorder?: (order: any) => void;
+  isReordering?: boolean;
 }
 
 
@@ -127,6 +129,8 @@ export default function OrderDetailsModal({
   onOpenChat,
   onRetryPayment,
   retryingOrderId,
+  onReorder,
+  isReordering,
 }: OrderDetailsModalProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const accessToken = useSelector((state: RootState) => state.auth?.accessToken);
@@ -948,6 +952,27 @@ export default function OrderDetailsModal({
             
 
        
+
+            {onReorder && (
+              <button
+                type="button"
+                onClick={() => onReorder(order)}
+                disabled={isReordering}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--color-primary,#166534)] hover:bg-[var(--color-primary-dark,#14532d)] text-white px-4 py-2 text-xs font-bold shadow-sm transition disabled:opacity-50 cursor-pointer"
+              >
+                {isReordering ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin text-white" />
+                    <span>Adding...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw size={14} />
+                    <span>Re-order Items</span>
+                  </>
+                )}
+              </button>
+            )}
 
             <button
               type="button"

@@ -3,6 +3,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
 import {
   ArrowLeft,
@@ -33,6 +34,7 @@ import {
   useVerifyPaymentMutation,
   useCancelOrderMutation,
 } from "../redux/services/orderApi";
+import { useAddCartItemMutation } from "../redux/services/cartApi";
 import { getSocket } from "../lib/socket";
 import { loadRazorpayScript } from "../lib/razorpay";
 import { toAssetUrl } from "@/utils/backendUrl";
@@ -127,9 +129,51 @@ export default function Orders() {
   const [selectedChatOrder, setSelectedChatOrder] = useState<any | null>(null);
   const [selectedDetailsOrder, setSelectedDetailsOrder] = useState<any | null>(null);
 
+  const router = useRouter();
   const [retryPayment] = useRetryPaymentMutation();
   const [verifyPayment] = useVerifyPaymentMutation();
   const [retryingOrderId, setRetryingOrderId] = useState<number | null>(null);
+  const [addCartItem] = useAddCartItemMutation();
+  const [reorderingOrderId, setReorderingOrderId] = useState<number | null>(null);
+
+  const handleReorder = async (order: any) => {
+    if (!order?.items || order.items.length === 0) {
+      toast.error("No items found in this order to re-order.");
+      return;
+    }
+    const orderDbId = order.dbId || order.id;
+    try {
+      setReorderingOrderId(orderDbId);
+      toast.loading("Adding items to your cart...", { id: "reorder-cart" });
+
+      let addedCount = 0;
+      for (const it of order.items) {
+        const prodId = Number(it.productId || it.id);
+        const qty = Math.max(1, Number(it.qty || 1));
+        if (prodId) {
+          try {
+            await addCartItem({ productId: prodId, quantity: qty }).unwrap();
+            addedCount++;
+          } catch (itemErr: any) {
+            console.warn(`Could not add product #${prodId} to cart:`, itemErr);
+          }
+        }
+      }
+
+      toast.dismiss("reorder-cart");
+      if (addedCount > 0) {
+        toast.success(`${addedCount} item${addedCount > 1 ? "s" : ""} added to your cart!`);
+        router.push("/cart");
+      } else {
+        toast.error("Items could not be added (they may be currently unavailable or out of stock).");
+      }
+    } catch (err: any) {
+      toast.dismiss("reorder-cart");
+      toast.error(err?.data?.message || err?.message || "Failed to re-order items.");
+    } finally {
+      setReorderingOrderId(null);
+    }
+  };
 
   const handleRetryPayment = async (order: any) => {
     const orderDbId = order.dbId || order.id;
@@ -430,6 +474,7 @@ export default function Orders() {
         admin_email: (o as any).admin_email,
         items: (o.items || []).map((it) => ({
           id: it.id,
+          productId: Number((it as any).product_id || it.id),
           name: it.product_name,
           qty: it.quantity,
           price: Math.round(Number(it.price || 0)),
@@ -1104,7 +1149,41 @@ export default function Orders() {
                         View Details
                       </button>
 
-                     
+                      <button
+                        type="button"
+                        onClick={() => handleReorder(order)}
+                        disabled={reorderingOrderId === order.dbId}
+                        className="
+                          inline-flex
+                          items-center
+                          justify-center
+                          gap-1.5
+                          rounded-xl
+                          bg-[var(--color-primary)]
+                          hover:bg-[var(--color-primary-dark)]
+                          px-4
+                          py-2.5
+                          text-[10px]
+                          font-bold
+                          text-white
+                          shadow-sm
+                          transition
+                          disabled:opacity-50
+                          cursor-pointer
+                        "
+                      >
+                        {reorderingOrderId === order.dbId ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin" />
+                            <span>Adding to Cart...</span>
+                          </>
+                        ) : (
+                          <>
+                            <RotateCcw size={13} />
+                            <span>Re-order</span>
+                          </>
+                        )}
+                      </button>
 
                       <Link
                         href="/menu"
@@ -1217,6 +1296,8 @@ export default function Orders() {
           }}
           onRetryPayment={handleRetryPayment}
           retryingOrderId={retryingOrderId}
+          onReorder={handleReorder}
+          isReordering={reorderingOrderId === (activeDetailsOrder?.dbId || activeDetailsOrder?.id)}
         />
       )}
 
