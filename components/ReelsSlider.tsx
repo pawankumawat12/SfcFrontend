@@ -5,6 +5,7 @@ import { Play, ChevronLeft, ChevronRight, Video, Sparkles, Volume2 } from "lucid
 import { FaInstagram, FaYoutube } from "react-icons/fa";
 import { useGetActiveReelsQuery, ReelItem } from "../redux/services/reelApi";
 import ReelModal from "./ReelModal";
+import { getOptimizedVideoUrl, getOptimizedVideoThumbnail } from "../utils/videoUtils";
 
 interface ReelsSliderProps {
   title?: string;
@@ -143,27 +144,36 @@ export default function ReelsSlider({
                   {/* Outer animated gradient ring on hover */}
                   <div className="absolute inset-0 z-20 rounded-2xl border-2 border-transparent transition-all duration-300 group-hover:border-rose-500/80 pointer-events-none" />
 
-                  {/* Thumbnail / Cover */}
-                  {reel.thumbnail_url ? (
-                    <img
-                      src={reel.thumbnail_url}
-                      alt={reel.title}
-                      className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
-                      loading="lazy"
-                    />
-                  ) : isDirect ? (
-                    <video
-                      src={`${reel.video_url}#t=0.5`}
-                      preload="metadata"
-                      muted
-                      playsInline
-                      className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-stone-900 text-stone-600">
-                      <Video size={40} />
-                    </div>
-                  )}
+                  {/* Ultra-Fast Optimized Cover Thumbnail */}
+                  {(() => {
+                    const coverImage = getOptimizedVideoThumbnail(reel.video_url, reel.thumbnail_url);
+                    if (coverImage) {
+                      return (
+                        <img
+                          src={coverImage}
+                          alt={reel.title}
+                          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                          loading="lazy"
+                        />
+                      );
+                    }
+                    if (isDirect) {
+                      return (
+                        <video
+                          src={`${getOptimizedVideoUrl(reel.video_url)}#t=0.5`}
+                          preload="none"
+                          muted
+                          playsInline
+                          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                        />
+                      );
+                    }
+                    return (
+                      <div className="flex h-full w-full items-center justify-center bg-stone-900 text-stone-600">
+                        <Video size={40} />
+                      </div>
+                    );
+                  })()}
 
                   {/* Multi-layered cinematic gradient */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/30 transition-opacity duration-300 group-hover:opacity-90" />

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { FaInstagram, FaYoutube } from "react-icons/fa";
 import { ReelItem } from "../redux/services/reelApi";
+import { getOptimizedVideoUrl, getOptimizedVideoThumbnail } from "../utils/videoUtils";
 
 interface ReelModalProps {
   reels?: ReelItem[];
@@ -420,11 +421,17 @@ export default function ReelModal({
               <video
                 ref={videoRef}
                 key={`video-${currentReel.id}`}
-                src={currentReel.video_url}
-                poster={currentReel.thumbnail_url || undefined}
+                src={getOptimizedVideoUrl(currentReel.video_url)}
+                poster={
+                  getOptimizedVideoThumbnail(
+                    currentReel.video_url,
+                    currentReel.thumbnail_url
+                  ) || undefined
+                }
                 autoPlay
                 loop
                 playsInline
+                preload="auto"
                 muted={isMuted}
                 onTimeUpdate={handleTimeUpdate}
                 className="h-full w-full object-cover select-none pointer-events-none"
