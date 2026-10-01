@@ -13,12 +13,13 @@ import {
   Zap,
   Bell,
   Wifi,
+  Code,
 } from "lucide-react";
 import PWAInstallButton from "@/components/PWAInstallButton";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
-import { useGetFooterQuery, useGetLogoQuery } from "../redux/services/settingsApi";
+import { useGetFooterQuery, useGetLogoQuery, useGetDeveloperSettingsQuery } from "../redux/services/settingsApi";
 import { useGetCmsPagesQuery } from "../redux/services/cmsApi";
-import { FaFacebook, FaInstagram, FaTwitter } from "react-icons/fa";
+import { FaFacebook, FaInstagram, FaTwitter, FaWhatsapp } from "react-icons/fa";
 import { toAssetUrl } from "@/utils/backendUrl";
 
 const quickLinks = [
@@ -74,7 +75,9 @@ export default function Footer() {
   const { data: footerResponse } = useGetFooterQuery();
   const { data: logoResponse } = useGetLogoQuery();
   const { data: cmsPagesResponse } = useGetCmsPagesQuery();
+  const { data: devSettingsResponse } = useGetDeveloperSettingsQuery();
   const footerSettings = footerResponse?.data;
+  const devSettings = devSettingsResponse?.data;
   const cmsPages = cmsPagesResponse?.data || [];
   const rawLogoUrl = logoResponse?.data?.logo_url ? toAssetUrl(logoResponse.data.logo_url) : "/images/sfcLogo.png";
   const [logoSrc, setLogoSrc] = React.useState(rawLogoUrl);
@@ -651,6 +654,65 @@ export default function Footer() {
             for food lovers
           </p>
         </div>
+
+        {/* DEVELOPER BRANDING & INQUIRY BAR (CONTROLLED FROM ADMIN SETTINGS) */}
+        {devSettings?.is_enabled && devSettings?.show_in_frontend && (
+          <div className="mt-6 pt-5 border-t border-white/10">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-3.5 sm:p-4 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 transition-all duration-200">
+              <div className="flex items-center gap-3 text-center sm:text-left">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-md">
+                  <Code size={17} />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    <span className="text-xs font-bold text-white tracking-wide">
+                      Platform Engineered by {devSettings.developer_name || "Pawan Kumawat"}
+                    </span>
+                    <span className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-400 border border-blue-500/20">
+                      Tech Partner
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-white/60 mt-0.5">
+                    {devSettings.developer_tagline || "Custom Food Ordering Websites, Cafe Apps & Enterprise Software"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto">
+                <a
+                  href={`https://wa.me/${(devSettings.developer_whatsapp || "917690939596").replace(/\D/g, "")}?text=${encodeURIComponent(
+                    devSettings.custom_inquiry_message || "Hi Pawan, I saw the SFC Bakers website and want to build a similar website/app for my business."
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold shadow-lg shadow-green-900/20 transition-all transform active:scale-95"
+                >
+                  <FaWhatsapp size={15} />
+                  <span>Build Your Website</span>
+                </a>
+                {devSettings.developer_phone && (
+                  <a
+                    href={`tel:${devSettings.developer_phone}`}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white/80 hover:text-white text-xs font-semibold border border-white/10 transition"
+                    title={`Call Developer: ${devSettings.developer_phone}`}
+                  >
+                    <Phone size={13} />
+                    <span className="hidden md:inline">{devSettings.developer_phone}</span>
+                  </a>
+                )}
+                {devSettings.developer_email && (
+                  <a
+                    href={`mailto:${devSettings.developer_email}`}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white/80 hover:text-white text-xs font-semibold border border-white/10 transition"
+                    title={`Email: ${devSettings.developer_email}`}
+                  >
+                    <Mail size={13} />
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
     </footer>

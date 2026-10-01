@@ -99,7 +99,7 @@ export default function RootLayout({
           <Navbar />
           <main className="app-main">{children}</main>
           <CustomToaster />
-          <WhatsAppChatButton />
+          {/* <WhatsAppChatButton /> */}
           <Footer />
           <PWAInstallPrompt />
           <PWAExitConfirmation />

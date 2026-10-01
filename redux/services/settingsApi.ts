@@ -78,6 +78,24 @@ export interface OrderPricingResponse {
   data: OrderPricingSettings;
 }
 
+export interface DeveloperSettings {
+  is_enabled: boolean;
+  developer_name: string;
+  developer_email: string;
+  developer_phone: string;
+  developer_whatsapp: string;
+  developer_tagline: string;
+  custom_inquiry_message: string;
+  show_in_frontend: boolean;
+  show_in_store_dashboard: boolean;
+}
+
+export interface DeveloperSettingsResponse {
+  success: boolean;
+  message?: string;
+  data: DeveloperSettings;
+}
+
 export const settingsApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     getTheme: build.query<ThemeSettingsResponse, void>({
@@ -100,6 +118,10 @@ export const settingsApi = baseApi.injectEndpoints({
       query: () => "/settings/order-pricing",
       providesTags: ["Settings"],
     }),
+    getDeveloperSettings: build.query<DeveloperSettingsResponse, void>({
+      query: () => "/settings/developer",
+      providesTags: ["Settings"],
+    }),
   }),
 });
 
@@ -109,4 +131,5 @@ export const {
   useGetLogoQuery,
   useGetStoreStatusQuery,
   useGetOrderPricingQuery,
+  useGetDeveloperSettingsQuery,
 } = settingsApi;
