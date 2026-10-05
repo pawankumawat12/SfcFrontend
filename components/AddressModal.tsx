@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import {
   X,
@@ -70,6 +70,7 @@ export default function AddressModal({
   const [customLabel, setCustomLabel] = useState<string>("");
   const [receiverName, setReceiverName] = useState<string>("");
   const [phoneNumber, setPhoneNumber] = useState<string>("");
+  const phoneInputRef = useRef<HTMLInputElement>(null);
   const [houseNumber, setHouseNumber] = useState<string>("");
   const [formattedAddress, setFormattedAddress] = useState<string>("");
   const [landmark, setLandmark] = useState<string>("");
@@ -172,8 +173,20 @@ export default function AddressModal({
       return;
     }
     const cleanPhone = normalizeIndianPhone(phoneNumber);
+    if (!cleanPhone) {
+      toast.error("Mobile number is required for delivery");
+      setTimeout(() => {
+        phoneInputRef.current?.focus();
+        phoneInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
+      return;
+    }
     if (!isValidIndianPhone(cleanPhone)) {
       toast.error("Please enter a valid 10-digit Indian mobile number");
+      setTimeout(() => {
+        phoneInputRef.current?.focus();
+        phoneInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
       return;
     }
 
@@ -494,6 +507,7 @@ export default function AddressModal({
                 <div className="relative">
                   <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                   <input
+                    ref={phoneInputRef}
                     type="tel"
                     required
                     maxLength={10}

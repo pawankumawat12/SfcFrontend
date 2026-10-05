@@ -10,13 +10,13 @@ const password = z
   .regex(/[!@#$%^&*(),.?\":{}|<>]/, "Add a special character");
 
 const phoneField = z
-  .string()
+  .string({ required_error: "Mobile number is required" })
+  .trim()
+  .min(1, "Mobile number is required")
   .transform((val) => normalizeIndianPhone(val))
-  .refine((val) => val === "" || isValidIndianPhone(val), {
-    message: "Enter a valid 10-digit phone number (starts with 6-9)",
-  })
-  .optional()
-  .or(z.literal(""));
+  .refine((val) => isValidIndianPhone(val), {
+    message: "Enter a valid 10-digit mobile number (starts with 6-9)",
+  });
 
 export const registerSchema = z
   .object({

@@ -88,6 +88,7 @@ export default function SelectLocationModal({
   const [receiverName, setReceiverName] = useState<string>("");
   const [phone, setPhone] = useState<string>("");
   const [label, setLabel] = useState<string>("Home");
+  const phoneInputRef = useRef<HTMLInputElement>(null);
   const prevOpenRef = useRef(false);
 
   // Initialize with currently saved location ONLY once when modal opens
@@ -149,6 +150,10 @@ export default function SelectLocationModal({
     }
     if (!phone && (user?.phone || user?.phone_number)) {
       setPhone(sanitizePhoneInput(user.phone || user.phone_number));
+    } else if (!phone) {
+      setTimeout(() => {
+        phoneInputRef.current?.focus();
+      }, 300);
     }
   };
 
@@ -197,10 +202,18 @@ export default function SelectLocationModal({
     const cleanPhone = phone ? normalizeIndianPhone(phone) : "";
     if (!cleanPhone) {
       toast.error("Mobile number is required for delivery");
+      setTimeout(() => {
+        phoneInputRef.current?.focus();
+        phoneInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
       return;
     }
     if (!isValidIndianPhone(cleanPhone)) {
       toast.error("Please enter a valid 10-digit Indian mobile number");
+      setTimeout(() => {
+        phoneInputRef.current?.focus();
+        phoneInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
       return;
     }
 
@@ -659,6 +672,7 @@ export default function SelectLocationModal({
                 <div className="relative">
                   <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                   <input
+                    ref={phoneInputRef}
                     type="tel"
                     inputMode="numeric"
                     autoComplete="tel"

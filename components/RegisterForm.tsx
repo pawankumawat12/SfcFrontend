@@ -292,13 +292,16 @@ export default function RegisterForm({
             />
           </Input>
           <Input
-            label="Phone number (optional)"
+            label="Mobile number *"
             error={registration.formState.errors.phone?.message}
           >
             <input
               className={input}
+              type="tel"
               inputMode="numeric"
               autoComplete="tel"
+              placeholder="10-digit mobile number"
+              maxLength={10}
               {...registration.register("phone")}
             />
           </Input>
