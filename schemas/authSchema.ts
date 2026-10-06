@@ -10,7 +10,7 @@ const password = z
   .regex(/[!@#$%^&*(),.?\":{}|<>]/, "Add a special character");
 
 const phoneField = z
-  .string({ required_error: "Mobile number is required" })
+  .string()
   .trim()
   .min(1, "Mobile number is required")
   .transform((val) => normalizeIndianPhone(val))
