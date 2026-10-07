@@ -17,11 +17,18 @@ import {
   Compass,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useDispatch } from "react-redux";
 import {
   Address,
   useGetAddressesQuery,
   useSetDefaultAddressMutation,
 } from "@/redux/services/addressApi";
+import { cartApi } from "@/redux/services/cartApi";
+import { useLazyResolveStoreByLocationQuery } from "@/redux/services/branchStoreApi";
+import {
+  setStoredDeliveryLocation,
+  DeliveryLocation,
+} from "@/lib/deliveryLocation";
 import AddressModal from "./AddressModal";
 import DeleteAddressDialog from "./DeleteAddressDialog";
 import SkeletonLoader from "./SkeletonLoader";
@@ -31,6 +38,8 @@ interface ProfileAddressesProps {
 }
 
 export default function ProfileAddresses({ user }: ProfileAddressesProps) {
+  const dispatch = useDispatch();
+  const [triggerResolveStore] = useLazyResolveStoreByLocationQuery();
   const { data: response, isLoading, isFetching } = useGetAddressesQuery(undefined, {
     skip: !user,
   });
@@ -58,6 +67,72 @@ export default function ProfileAddresses({ user }: ProfileAddressesProps) {
     try {
       setSettingDefaultId(addressId);
       await setDefaultAddress(addressId).unwrap();
+
+      const targetAddr = addresses.find((a) => a.id === addressId);
+      if (targetAddr) {
+        const lat = targetAddr.latitude != null ? Number(targetAddr.latitude) : null;
+        const lng = targetAddr.longitude != null ? Number(targetAddr.longitude) : null;
+        if (lat != null && lng != null) {
+          let resolvedStoreId: number | "admin" = "admin";
+          let resolvedStoreName: string = "Main Bakery";
+          let canDeliver = true;
+          let isOutOfDeliveryZone = false;
+          let distanceKm: number | null = null;
+          let deliveryWarning: string | null = null;
+          let maxDeliveryRadius = 10;
+
+          try {
+            const storeRes = await triggerResolveStore({ lat, lng }).unwrap();
+            const store = storeRes?.store;
+            const isBranch = storeRes?.storeType === "branch" && store?.id;
+            resolvedStoreId = isBranch ? Number(store.id) : "admin";
+            resolvedStoreName = store?.name || "Main Bakery";
+            isOutOfDeliveryZone = Boolean(
+              storeRes?.can_deliver === false || (storeRes as any)?.outOfDeliveryZone
+            );
+            canDeliver = !isOutOfDeliveryZone;
+            distanceKm = storeRes?.distanceKm != null ? Number(storeRes.distanceKm) : null;
+            deliveryWarning = isOutOfDeliveryZone
+              ? (storeRes?.message || "Delivery is available in our covered service areas.")
+              : null;
+            maxDeliveryRadius = (storeRes as any)?.max_delivery_distance || 10;
+          } catch (storeErr) {
+            console.warn("Could not resolve store for default address:", storeErr);
+          }
+
+          const shortAddr = targetAddr.house_number
+            ? `${targetAddr.house_number}, ${targetAddr.city || targetAddr.formatted_address || ""}`
+            : (targetAddr.formatted_address || targetAddr.city || "Delivery Address");
+
+          const updatedLoc: DeliveryLocation = {
+            lat,
+            lng,
+            address: targetAddr.formatted_address || `${targetAddr.house_number}, ${targetAddr.city}`,
+            shortAddress: shortAddr,
+            houseNumber: targetAddr.house_number || "",
+            roadArea: targetAddr.formatted_address || "",
+            landmark: targetAddr.landmark || "",
+            city: targetAddr.city || "Jaipur",
+            state: targetAddr.state || "Rajasthan",
+            pincode: targetAddr.pincode || "",
+            receiverName: targetAddr.receiver_name || user?.name || "",
+            phone: targetAddr.phone_number || user?.phone || "",
+            label: targetAddr.label || "Home",
+            addressId: targetAddr.id,
+            storeId: resolvedStoreId,
+            storeName: resolvedStoreName,
+            isSet: true,
+            distanceKm,
+            canDeliver,
+            outOfDeliveryZone: isOutOfDeliveryZone,
+            deliveryWarning,
+            maxDeliveryRadius,
+          };
+          setStoredDeliveryLocation(updatedLoc);
+        }
+      }
+
+      dispatch(cartApi.util.invalidateTags(["Cart"]));
       toast.success("Default delivery address updated!");
     } catch (err: any) {
       toast.error(err?.data?.message || "Failed to set default address");

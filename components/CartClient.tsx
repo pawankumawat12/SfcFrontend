@@ -9,7 +9,7 @@ declare global {
 
 
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -87,6 +87,7 @@ import {
   OfferItem,
 } from "../redux/services/offerApi";
 import { useGetStoreStatusQuery } from "../redux/services/settingsApi";
+import { useLazyResolveStoreByLocationQuery } from "../redux/services/branchStoreApi";
 import LoginModal from "./LoginModal";
 import RegisterModal from "./RegisterModal";
 import AddressModal from "./AddressModal";
@@ -153,6 +154,7 @@ export default function CartClient() {
 
   const { data: availableOffers = [] } = useGetOffersQuery();
   const [validateOffer, { isLoading: isValidatingOffer }] = useValidateOfferMutation();
+  const [triggerResolveStore] = useLazyResolveStoreByLocationQuery();
 
   // Guest Cart State
   const [guestCartItems, setGuestCartItems] = useState<GuestCartItem[]>([]);
@@ -183,6 +185,7 @@ export default function CartClient() {
       offerCode: appliedOfferCode || undefined,
       lat: activeDeliveryLoc?.lat != null ? Number(activeDeliveryLoc.lat) : undefined,
       lng: activeDeliveryLoc?.lng != null ? Number(activeDeliveryLoc.lng) : undefined,
+      paymentMethod,
     })
       .unwrap()
       .then((res) => {
@@ -195,7 +198,7 @@ export default function CartClient() {
       return () => {
         isMounted = false;
       };
-    }, [user, guestCartItems, appliedOfferCode, activeDeliveryLoc?.lat, activeDeliveryLoc?.lng, getGuestCartPreview]);
+    }, [user, guestCartItems, appliedOfferCode, activeDeliveryLoc?.lat, activeDeliveryLoc?.lng, paymentMethod, getGuestCartPreview]);
     
     // Safeguard: If user logs in and guest cart still has items, auto-merge!
     useEffect(() => {
@@ -238,6 +241,7 @@ export default function CartClient() {
     {
       addressId: selectedAddressId || undefined,
       offerCode: appliedOfferCode || undefined,
+      paymentMethod,
     },
     {
       skip: !user,
@@ -351,12 +355,39 @@ export default function CartClient() {
     };
   }, [user, refetchAddresses, refetchCart]);
 
-  const handleSelectCartAddress = (addr: Address) => {
+  const handleSelectCartAddress = async (addr: Address) => {
     setSelectedAddressId(addr.id);
 
     const lat = addr.latitude ? Number(addr.latitude) : null;
     const lng = addr.longitude ? Number(addr.longitude) : null;
     if (lat != null && lng != null) {
+      let resolvedStoreId: number | "admin" = "admin";
+      let resolvedStoreName: string = "Main Bakery";
+      let canDeliver = true;
+      let isOutOfDeliveryZone = false;
+      let distanceKm: number | null = null;
+      let deliveryWarning: string | null = null;
+      let maxDeliveryRadius = 10;
+
+      try {
+        const storeRes = await triggerResolveStore({ lat, lng }).unwrap();
+        const store = storeRes?.store;
+        const isBranch = storeRes?.storeType === "branch" && store?.id;
+        resolvedStoreId = isBranch ? Number(store.id) : "admin";
+        resolvedStoreName = store?.name || "Main Bakery";
+        isOutOfDeliveryZone = Boolean(
+          storeRes?.can_deliver === false || (storeRes as any)?.outOfDeliveryZone
+        );
+        canDeliver = !isOutOfDeliveryZone;
+        distanceKm = storeRes?.distanceKm != null ? Number(storeRes.distanceKm) : null;
+        deliveryWarning = isOutOfDeliveryZone
+          ? (storeRes?.message || "Delivery is available in our covered service areas.")
+          : null;
+        maxDeliveryRadius = (storeRes as any)?.max_delivery_distance || 10;
+      } catch (resolveErr) {
+        console.warn("Could not resolve store branch for address:", resolveErr);
+      }
+
       const shortAddr = addr.house_number
         ? `${addr.house_number}, ${addr.city || addr.formatted_address || ""}`
         : (addr.formatted_address || addr.city || "Delivery Address");
@@ -376,9 +407,14 @@ export default function CartClient() {
         phone: addr.phone_number || user?.phone || "",
         label: addr.label || "Home",
         addressId: addr.id,
-        storeId: activeDeliveryLoc?.storeId ?? null,
-        storeName: activeDeliveryLoc?.storeName || "Main Bakery",
+        storeId: resolvedStoreId,
+        storeName: resolvedStoreName,
         isSet: true,
+        distanceKm,
+        canDeliver,
+        outOfDeliveryZone: isOutOfDeliveryZone,
+        deliveryWarning,
+        maxDeliveryRadius,
       };
       setStoredDeliveryLocation(updatedLoc);
     }
@@ -452,9 +488,41 @@ export default function CartClient() {
     hasUndeliverableItems: false,
     undeliverableCount: 0,
   };
-  const summary: CartSummary = user
-  ? (cartResponse?.data?.summary || defaultSummary)
-  : (guestPreviewResponse?.data?.summary || defaultSummary);
+  const rawSummary: CartSummary = user
+    ? (cartResponse?.data?.summary || defaultSummary)
+    : (guestPreviewResponse?.data?.summary || defaultSummary);
+
+  const isCodSelected = Boolean(
+    paymentMethod &&
+      (paymentMethod.toLowerCase().includes("cash") ||
+        paymentMethod.toLowerCase().includes("cod"))
+  );
+
+  const summary: CartSummary = useMemo(() => {
+    // If backend already matches payment method, use raw summary
+    const backendCodFee = Number(rawSummary.codFee || 0);
+    const backendGrandTotal = Number(rawSummary.grandTotal || 0);
+
+    if (isCodSelected) {
+      return rawSummary;
+    }
+
+    // If Online Payment is selected, COD fee is strictly 0 and grandTotal adjusts if backend had included COD fee
+    if (backendCodFee > 0) {
+      return {
+        ...rawSummary,
+        codFee: 0,
+        isCod: false,
+        grandTotal: Math.max(0, backendGrandTotal - backendCodFee),
+      };
+    }
+
+    return {
+      ...rawSummary,
+      codFee: 0,
+      isCod: false,
+    };
+  }, [rawSummary, isCodSelected]);
 
   const getItemDeliveryStatus = (
     it: any
@@ -659,15 +727,24 @@ export default function CartClient() {
     
     if (summary.isBelowMinimumOrder) {
       toast.error(
-        `Minimum order amount is ₹${formatRupee(
+        `Minimum Item Total (Food value) must be ₹${formatRupee(
           summary.minimumOrderAmount
-        )}`
+        )}. Please add items worth ₹${formatRupee(
+          summary.minimumOrderShortfall
+        )} more.`
       );
       return;
     }
     
     if (hasUndeliverableItems) {
       toast.error("Please remove items that cannot be delivered to your selected location before checkout");
+      return;
+    }
+
+    if (summary.isOutOfRange) {
+      toast.error(
+        `Delivery is not available for this address. Distance (${summary.distanceKm || "?"} km) exceeds our maximum delivery radius of ${summary.maxDeliveryDistance || 10} km.`
+      );
       return;
     }
     
@@ -1799,6 +1876,30 @@ export default function CartClient() {
                   })}
                 </div>
               )}
+
+              {user && selectedAddress && summary.isOutOfRange && (
+                <div className="mt-4 flex items-start gap-3.5 rounded-2xl border border-red-200 bg-red-50/90 p-4 text-red-800 shadow-sm">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xs font-black text-red-900 uppercase tracking-wide">
+                        Delivery Not Available At This Location
+                      </h4>
+                      <span className="rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-bold text-red-800">
+                        {summary.distanceKm != null ? `${summary.distanceKm} km away` : "Out of range"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-red-700 leading-relaxed">
+                      We cannot deliver products to this address because it is outside our maximum delivery service radius ({summary.maxDeliveryDistance || 10} km).
+                    </p>
+                    <p className="mt-2 text-[11px] font-bold text-red-800">
+                      👉 Please select or add an address within our delivery area to proceed.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
 
@@ -2143,10 +2244,15 @@ export default function CartClient() {
                 {/* Minimum Order Warning */}
                 {summary.isBelowMinimumOrder && (
                   <div className="rounded-xl bg-red-50 p-2.5 text-[11px] font-bold text-red-700 border border-red-200 flex items-start gap-2">
-                    <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                    <span>
-                      Minimum order amount is ₹{formatRupee(summary.minimumOrderAmount)}. Please add ₹{formatRupee(summary.minimumOrderShortfall)} more to proceed.
-                    </span>
+                    <AlertTriangle size={15} className="shrink-0 mt-0.5 text-red-600" />
+                    <div className="space-y-0.5">
+                      <span>
+                        Minimum <strong>Item Total (Food value)</strong> must be ₹{formatRupee(summary.minimumOrderAmount)} (excluding taxes & delivery).
+                      </span>
+                      <div className="text-[10.5px] font-medium text-red-600">
+                        Current Items: ₹{formatRupee(summary.subtotal)} • Please add items worth <strong>₹{formatRupee(summary.minimumOrderShortfall)} more</strong> to proceed.
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -2218,6 +2324,18 @@ export default function CartClient() {
                       <p className="mt-1 text-[11px] text-[var(--color-text-secondary)] line-clamp-2">
                         {selectedAddress.house_number}, {selectedAddress.formatted_address || `${selectedAddress.city} - ${selectedAddress.pincode}`}
                       </p>
+
+                      {summary.isOutOfRange && (
+                        <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-2.5 text-[11px] text-red-700">
+                          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-red-600" />
+                          <div>
+                            <p className="font-bold text-red-800">Delivery Not Available</p>
+                            <p className="mt-0.5 text-[10px] text-red-600">
+                              {summary.distanceKm != null ? `${summary.distanceKm} km away` : "Out of zone"} (Max radius: {summary.maxDeliveryDistance || 10} km). Please select another address.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="mt-2 text-center">
@@ -2315,12 +2433,12 @@ export default function CartClient() {
                             </span>
                           </div>
 
-                          {/* {summary.codFee <= 0 && (
+                          {isCodSelected && summary.codFee > 0 && (
                             <span className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-amber-100/70 border border-amber-200 px-2.5 py-1 text-[11px] font-bold text-amber-900">
                               <Package size={12} className="shrink-0" />
                               <span>Includes ₹{formatRupee(summary.codFee)} Cash on Delivery fee</span>
                             </span>
-                          )} */}
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2381,6 +2499,7 @@ export default function CartClient() {
                     items.length === 0 ||
                     summary.hasOutOfStockItems ||
                     hasUndeliverableItems ||
+                    summary.isOutOfRange ||
                     isProcessingPayment ||
                     (user ? (
                       summary.isBelowMinimumOrder ||
@@ -2419,7 +2538,9 @@ export default function CartClient() {
                       ? "Store is Currently Closed"
                       : !user
                         ? "Sign In to Checkout"
-                        : hasUndeliverableItems
+                        : summary.isOutOfRange
+                          ? "Delivery Not Available At This Address"
+                          : hasUndeliverableItems
                           ? "Remove Undeliverable Items"
                           : isProcessingPayment && !isPlacingOrder && !isVerifyingPayment
                             ? "Preparing Payment..."

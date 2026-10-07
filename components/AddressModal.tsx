@@ -22,6 +22,7 @@ import {
   useUpdateAddressMutation,
 } from "@/redux/services/addressApi";
 import { cartApi } from "@/redux/services/cartApi";
+import { useLazyResolveStoreByLocationQuery } from "@/redux/services/branchStoreApi";
 import {
   getStoredDeliveryLocation,
   setStoredDeliveryLocation,
@@ -62,6 +63,7 @@ export default function AddressModal({
   const dispatch = useDispatch();
   const [createAddress, { isLoading: isCreating }] = useCreateAddressMutation();
   const [updateAddress, { isLoading: isUpdating }] = useUpdateAddressMutation();
+  const [triggerResolveStore] = useLazyResolveStoreByLocationQuery();
   const isSaving = isCreating || isUpdating;
   const [isGeocoding, setIsGeocoding] = useState<boolean>(false);
 
@@ -209,6 +211,45 @@ export default function AddressModal({
     };
 
     try {
+      const resolveStoreForCoords = async (lat: number, lng: number) => {
+        let resolvedStoreId: number | "admin" = "admin";
+        let resolvedStoreName: string = "Main Bakery";
+        let canDeliver = true;
+        let isOutOfDeliveryZone = false;
+        let distanceKm: number | null = null;
+        let deliveryWarning: string | null = null;
+        let maxDeliveryRadius = 10;
+
+        try {
+          const storeRes = await triggerResolveStore({ lat, lng }).unwrap();
+          const store = storeRes?.store;
+          const isBranch = storeRes?.storeType === "branch" && store?.id;
+          resolvedStoreId = isBranch ? Number(store.id) : "admin";
+          resolvedStoreName = store?.name || "Main Bakery";
+          isOutOfDeliveryZone = Boolean(
+            storeRes?.can_deliver === false || (storeRes as any)?.outOfDeliveryZone
+          );
+          canDeliver = !isOutOfDeliveryZone;
+          distanceKm = storeRes?.distanceKm != null ? Number(storeRes.distanceKm) : null;
+          deliveryWarning = isOutOfDeliveryZone
+            ? (storeRes?.message || "Delivery is available in our covered service areas.")
+            : null;
+          maxDeliveryRadius = (storeRes as any)?.max_delivery_distance || 10;
+        } catch (storeErr) {
+          console.warn("Could not resolve store for address:", storeErr);
+        }
+
+        return {
+          resolvedStoreId,
+          resolvedStoreName,
+          canDeliver,
+          isOutOfDeliveryZone,
+          distanceKm,
+          deliveryWarning,
+          maxDeliveryRadius,
+        };
+      };
+
       if (initialData?.id) {
         const res = await updateAddress({
           id: initialData.id,
@@ -224,7 +265,8 @@ export default function AddressModal({
               ? `${updatedAddr.house_number}, ${updatedAddr.city || updatedAddr.formatted_address || ""}`
               : (updatedAddr.formatted_address || updatedAddr.city || "Delivery Address");
 
-            const currentStored = getStoredDeliveryLocation();
+            const storeInfo = await resolveStoreForCoords(lat, lng);
+
             const updatedLoc: DeliveryLocation = {
               lat,
               lng,
@@ -240,9 +282,14 @@ export default function AddressModal({
               phone: updatedAddr.phone_number || authUser?.phone || "",
               label: updatedAddr.label || "Home",
               addressId: updatedAddr.id,
-              storeId: currentStored?.storeId ?? null,
-              storeName: currentStored?.storeName || "Main Bakery",
+              storeId: storeInfo.resolvedStoreId,
+              storeName: storeInfo.resolvedStoreName,
               isSet: true,
+              distanceKm: storeInfo.distanceKm,
+              canDeliver: storeInfo.canDeliver,
+              outOfDeliveryZone: storeInfo.isOutOfDeliveryZone,
+              deliveryWarning: storeInfo.deliveryWarning,
+              maxDeliveryRadius: storeInfo.maxDeliveryRadius,
             };
             setStoredDeliveryLocation(updatedLoc);
           }
@@ -264,7 +311,8 @@ export default function AddressModal({
               ? `${createdAddr.house_number}, ${createdAddr.city || createdAddr.formatted_address || ""}`
               : (createdAddr.formatted_address || createdAddr.city || "Delivery Address");
 
-            const currentStored = getStoredDeliveryLocation();
+            const storeInfo = await resolveStoreForCoords(lat, lng);
+
             const newLoc: DeliveryLocation = {
               lat,
               lng,
@@ -280,9 +328,14 @@ export default function AddressModal({
               phone: createdAddr.phone_number || authUser?.phone || "",
               label: createdAddr.label || "Home",
               addressId: createdAddr.id,
-              storeId: currentStored?.storeId ?? null,
-              storeName: currentStored?.storeName || "Main Bakery",
+              storeId: storeInfo.resolvedStoreId,
+              storeName: storeInfo.resolvedStoreName,
               isSet: true,
+              distanceKm: storeInfo.distanceKm,
+              canDeliver: storeInfo.canDeliver,
+              outOfDeliveryZone: storeInfo.isOutOfDeliveryZone,
+              deliveryWarning: storeInfo.deliveryWarning,
+              maxDeliveryRadius: storeInfo.maxDeliveryRadius,
             };
             setStoredDeliveryLocation(newLoc);
           }

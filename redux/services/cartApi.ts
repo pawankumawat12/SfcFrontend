@@ -197,6 +197,9 @@ const transformCartResponse = (response: any): CartResponse => {
       // MADE_TO_ORDER products are never out of stock
       isOutOfStock: storeIsClosed || (isMadeToOrder ? false : (stock <= 0 || item.is_active === false)),
       exceedsStock: isMadeToOrder ? false : quantity > stock,
+      cannot_deliver: Boolean(item.cannot_deliver),
+      cannot_deliver_reason: item.cannot_deliver_reason || null,
+      is_deliverable: item.is_deliverable !== false && !item.cannot_deliver,
       added_at: item.added_at,
       updated_at: item.updated_at,
     };
@@ -366,7 +369,7 @@ export const cartApi = baseApi.injectEndpoints({
     }),
     getGuestCartPreview: build.mutation<
       CartResponse,
-      { items: { productId: number; quantity: number }[]; offerCode?: string; lat?: number; lng?: number }
+      { items: { productId: number; quantity: number }[]; offerCode?: string; lat?: number; lng?: number; paymentMethod?: string }
     >({
       query: (body) => ({
         url: "/cart/guest-preview",
