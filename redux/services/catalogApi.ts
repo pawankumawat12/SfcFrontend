@@ -79,12 +79,18 @@ export const catalogApi = baseApi.injectEndpoints({
       query: (params: StoreProductQuery = {}) => {
         const { storeId, store_id, ...rest } = params || {};
         const effectiveStoreId = store_id !== undefined ? store_id : storeId;
+        const isBranch =
+          effectiveStoreId !== undefined &&
+          effectiveStoreId !== null &&
+          effectiveStoreId !== "" &&
+          effectiveStoreId !== "admin";
+
         return {
           url: "/products",
           params: {
             limit: 100,
             isActive: true,
-            include_admin: true,
+            include_admin: !isBranch,
             ...(effectiveStoreId !== undefined ? { store_id: effectiveStoreId } : {}),
             ...rest,
           },
@@ -99,7 +105,6 @@ export const catalogApi = baseApi.injectEndpoints({
     getStoreProduct: build.query({
       query: (id) => ({
         url: `/products/${id}`,
-        params: { include_admin: true },
       }),
       transformResponse: (response: ApiItemResponse<ApiProduct>) => ({
         ...response,
@@ -110,7 +115,7 @@ export const catalogApi = baseApi.injectEndpoints({
     getStoreCategories: build.query({
       query: (params = {}) => ({
         url: "/categories",
-        params: { limit: 100, isActive: true, include_admin: true, ...params },
+        params: { limit: 100, isActive: true, ...params },
       }),
       transformResponse: (response: ApiResponse<ApiCategory>) => ({
         ...response,
