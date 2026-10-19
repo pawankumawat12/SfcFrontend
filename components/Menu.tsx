@@ -1324,7 +1324,7 @@ export default function Menu() {
         variant="menu"
         title="Baking Stories & Viral Treats"
         subtitle="Watch our fresh oven bakes and creative cake recipes in action!"
-        className="pb-12"
+        className="pb-28 md:pb-12"
       />
     </main>
   );

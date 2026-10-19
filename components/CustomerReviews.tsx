@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -90,13 +90,19 @@ export default function CustomerReviews() {
     }
   }, [reviews.length, activeIndex]);
 
+  const [isPaused, setIsPaused] = useState(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const isMouseDownRef = useRef<boolean>(false);
+  const mouseStartXRef = useRef<number | null>(null);
+
   /*
    * --------------------------------------------------
-   * AUTO SLIDER
+   * AUTO SLIDER (Pauses when user hovers or interacts)
    * --------------------------------------------------
    */
   useEffect(() => {
-    if (reviews.length <= 1) return;
+    if (reviews.length <= 1 || isPaused) return;
 
     const id = setInterval(() => {
       setActiveIndex((current) =>
@@ -105,7 +111,7 @@ export default function CustomerReviews() {
     }, 5000);
 
     return () => clearInterval(id);
-  }, [reviews.length]);
+  }, [reviews.length, isPaused]);
 
   /*
    * --------------------------------------------------
@@ -124,6 +130,59 @@ export default function CustomerReviews() {
     setActiveIndex((current) =>
       current >= reviews.length - 1 ? 0 : current + 1
     );
+  };
+
+  // Touch Swipe Handlers (Mobile / Tablet)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+    setIsPaused(true);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current !== null) {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const diffX = touchStartXRef.current - touchEndX;
+      const diffY = (touchStartYRef.current || 0) - touchEndY;
+
+      // Check if horizontal swipe is dominant and > 40px
+      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 40) {
+        if (diffX > 0) {
+          nextReview();
+        } else {
+          previousReview();
+        }
+      }
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    setTimeout(() => setIsPaused(false), 2500);
+  };
+
+  // Mouse Drag Handlers (Desktop)
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a")) return;
+    isMouseDownRef.current = true;
+    mouseStartXRef.current = e.clientX;
+    setIsPaused(true);
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (isMouseDownRef.current && mouseStartXRef.current !== null) {
+      const diffX = mouseStartXRef.current - e.clientX;
+      if (Math.abs(diffX) > 45) {
+        if (diffX > 0) {
+          nextReview();
+        } else {
+          previousReview();
+        }
+      }
+    }
+    isMouseDownRef.current = false;
+    mouseStartXRef.current = null;
+    setTimeout(() => setIsPaused(false), 2500);
   };
 
   /*
@@ -319,7 +378,18 @@ export default function CustomerReviews() {
         {/* =====================================================
             REVIEWS
         ===================================================== */}
-        <div className="relative mt-10">
+        <div
+          className="relative mt-10 select-none cursor-grab active:cursor-grabbing"
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => {
+            isMouseDownRef.current = false;
+            setIsPaused(false);
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+        >
           {/* Desktop Previous */}
           {reviews.length > 3 && (
             <button
@@ -386,28 +456,48 @@ export default function CustomerReviews() {
               </div>
             </div>
 
-            {/* Mobile dots */}
+            {/* Mobile Navigation Controls: Arrows + Dots */}
             {reviews.length > 1 && (
-              <div className="mt-5 flex justify-center gap-2">
-                {reviews.map((review, index) => (
-                  <button
-                    key={review.id}
-                    type="button"
-                    aria-label={`Go to review ${index + 1}`}
-                    onClick={() => setActiveIndex(index)}
-                    className={`
-                      h-2
-                      rounded-full
-                      transition-all
-                      duration-300
-                      ${
-                        activeIndex === index
-                          ? "w-7 bg-[var(--color-primary)]"
-                          : "w-2 bg-[var(--color-primary)]/25"
-                      }
-                    `}
-                  />
-                ))}
+              <div className="mt-5 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Previous review"
+                  onClick={previousReview}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text-primary)] shadow-xs transition hover:scale-105 hover:text-[var(--color-primary)]"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                <div className="flex items-center gap-1.5">
+                  {reviews.map((review, index) => (
+                    <button
+                      key={review.id}
+                      type="button"
+                      aria-label={`Go to review ${index + 1}`}
+                      onClick={() => setActiveIndex(index)}
+                      className={`
+                        h-2
+                        rounded-full
+                        transition-all
+                        duration-300
+                        ${
+                          activeIndex === index
+                            ? "w-6 bg-[var(--color-primary)]"
+                            : "w-2 bg-[var(--color-primary)]/25"
+                        }
+                      `}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Next review"
+                  onClick={nextReview}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text-primary)] shadow-xs transition hover:scale-105 hover:text-[var(--color-primary)]"
+                >
+                  <ChevronRight size={16} />
+                </button>
               </div>
             )}
           </div>

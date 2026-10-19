@@ -1016,7 +1016,7 @@ export default function CartClient() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-[var(--bg-body)] pt-24 pb-20">
+      <main className="min-h-screen bg-[var(--bg-body)] pt-24 pb-28 md:pb-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-8 space-y-2">
             <SkeletonLoader variant="text" lines={1} height={32} width={200} />
@@ -1038,7 +1038,7 @@ export default function CartClient() {
 
   if (!items.length) {
     return (
-      <main className="min-h-screen bg-[var(--bg-body)] pt-24 pb-20">
+      <main className="min-h-screen bg-[var(--bg-body)] pt-24 pb-28 md:pb-20">
         <div className="mx-auto flex min-h-[70vh] max-w-xl items-center justify-center px-4">
           <div className="w-full rounded-3xl border border-[var(--color-border)] bg-white p-8 text-center shadow-sm sm:p-12">
             <div
@@ -1157,7 +1157,7 @@ export default function CartClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--bg-body)]">
+    <main className="min-h-screen bg-[var(--bg-body)] pb-28 md:pb-12">
       <section className="">
         <div className="mx-auto max-w-7xl px-4 py-6 ">
           <Link

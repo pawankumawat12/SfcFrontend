@@ -58,7 +58,7 @@ export default function LocationContact() {
   ];
 
   return (
-    <section className="bg-white px-4 py-14 md:px-8 md:py-20">
+    <section className="bg-white px-4 pt-14 pb-28 md:px-8 md:py-20">
       <div className="mx-auto max-w-7xl">
 
         {/* =====================================================

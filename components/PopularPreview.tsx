@@ -77,10 +77,49 @@ export default function PopularPreview() {
   }, [autoplay]);
 
   /* -----------------------------------------
+     DRAG & TOUCH SCROLL
+  ----------------------------------------- */
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+  const hasDraggedRef = useRef(false);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    isDraggingRef.current = true;
+    hasDraggedRef.current = false;
+    startXRef.current = e.pageX - el.offsetLeft;
+    scrollLeftRef.current = el.scrollLeft;
+    setAutoplay(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingRef.current) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - startXRef.current) * 1.5;
+    if (Math.abs(walk) > 6) {
+      hasDraggedRef.current = true;
+    }
+    el.scrollLeft = scrollLeftRef.current - walk;
+  };
+
+  const handleMouseUpOrLeave = () => {
+    isDraggingRef.current = false;
+    setTimeout(() => {
+      hasDraggedRef.current = false;
+      setAutoplay(true);
+    }, 1500);
+  };
+
+  /* -----------------------------------------
      CATEGORY CLICK
   ----------------------------------------- */
 
   function goToCategory(id: string) {
+    if (hasDraggedRef.current) return;
     router.push(
       `/menu?category=${encodeURIComponent(id)}`
     );
@@ -91,6 +130,7 @@ export default function PopularPreview() {
   ----------------------------------------- */
 
   function scrollByAmount(direction: number) {
+    setAutoplay(false);
     const el = scrollerRef.current;
 
     if (!el) return;
@@ -99,6 +139,7 @@ export default function PopularPreview() {
       left: direction * el.clientWidth * 0.65,
       behavior: "smooth",
     });
+    setTimeout(() => setAutoplay(true), 2500);
   }
 
   return (
@@ -217,7 +258,12 @@ export default function PopularPreview() {
           <div
             ref={scrollerRef}
             onMouseEnter={() => setAutoplay(false)}
-            onMouseLeave={() => setAutoplay(true)}
+            onMouseLeave={handleMouseUpOrLeave}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUpOrLeave}
+            onTouchStart={() => setAutoplay(false)}
+            onTouchEnd={() => setTimeout(() => setAutoplay(true), 2500)}
             className="
               flex
               gap-2
@@ -227,6 +273,9 @@ export default function PopularPreview() {
               snap-mandatory
               py-3
               scrollbar-x
+              cursor-grab
+              active:cursor-grabbing
+              select-none
             "
           >
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -93,16 +93,22 @@ export default function Hero() {
     }
   }, [slides.length, index]);
 
-  // Auto-slide every 5 seconds if multiple slides exist
+  const [isPaused, setIsPaused] = useState(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const isMouseDownRef = useRef<boolean>(false);
+  const mouseStartXRef = useRef<number | null>(null);
+
+  // Auto-slide every 5 seconds if multiple slides exist and not paused
   useEffect(() => {
-    if (slides.length <= 1) return;
+    if (slides.length <= 1 || isPaused) return;
 
     const id = setInterval(() => {
       setIndex((current) => (current + 1) % slides.length);
     }, 5000);
 
     return () => clearInterval(id);
-  }, [slides.length]);
+  }, [slides.length, isPaused]);
 
   const currentSlide = slides[index] || slides[0] || FALLBACK_SLIDES[0];
   const slideImage = toAssetUrl(currentSlide.img || currentSlide.image);
@@ -129,10 +135,74 @@ export default function Hero() {
     );
   };
 
+  // Touch Swipe Handlers (Mobile / Tablet)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+    setIsPaused(true);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current !== null) {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const diffX = touchStartXRef.current - touchEndX;
+      const diffY = (touchStartYRef.current || 0) - touchEndY;
+
+      // Only trigger if horizontal swipe is dominant and > 40px
+      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 40) {
+        if (diffX > 0) {
+          nextSlide();
+        } else {
+          previousSlide();
+        }
+      }
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    setTimeout(() => setIsPaused(false), 2000);
+  };
+
+  // Mouse Drag Handlers (Desktop)
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("a, button, input, select")) return;
+    isMouseDownRef.current = true;
+    mouseStartXRef.current = e.clientX;
+    setIsPaused(true);
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (isMouseDownRef.current && mouseStartXRef.current !== null) {
+      const diffX = mouseStartXRef.current - e.clientX;
+      if (Math.abs(diffX) > 50) {
+        if (diffX > 0) {
+          nextSlide();
+        } else {
+          previousSlide();
+        }
+      }
+    }
+    isMouseDownRef.current = false;
+    mouseStartXRef.current = null;
+    setTimeout(() => setIsPaused(false), 2000);
+  };
+
   return (
     <main className="w-full overflow-hidden bg-(--bg-body)">
 
-      <section className="relative min-h-100 md:min-h-150 lg:min-h-162.5 overflow-hidden bg-stone-900 flex items-center">
+      <section
+        className="relative min-h-100 md:min-h-150 lg:min-h-162.5 overflow-hidden bg-stone-900 flex items-center select-none"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => {
+          isMouseDownRef.current = false;
+          setIsPaused(false);
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+      >
 
         {/* Full Background Slider Image */}
         <div className="absolute inset-0 z-0 overflow-hidden">
@@ -530,12 +600,16 @@ export default function Hero() {
           onClick={previousSlide}
           className="
             absolute
-            left-3
+            left-2
             top-1/2
             z-30
-            hidden
-            h-11
-            w-11
+            flex
+            h-8
+            w-8
+            sm:h-10
+            sm:w-10
+            md:h-11
+            md:w-11
             -translate-y-1/2
             items-center
             justify-center
@@ -551,11 +625,12 @@ export default function Hero() {
             hover:scale-110
             hover:bg-white
             hover:text-black
-            md:flex
+            sm:left-3
             lg:left-6
           "
         >
-          <ChevronLeft size={22} />
+          <ChevronLeft size={20} className="sm:hidden" />
+          <ChevronLeft size={22} className="hidden sm:block" />
         </button>
 
         <button
@@ -564,12 +639,16 @@ export default function Hero() {
           onClick={nextSlide}
           className="
             absolute
-            right-3
+            right-2
             top-1/2
             z-30
-            hidden
-            h-11
-            w-11
+            flex
+            h-8
+            w-8
+            sm:h-10
+            sm:w-10
+            md:h-11
+            md:w-11
             -translate-y-1/2
             items-center
             justify-center
@@ -585,11 +664,12 @@ export default function Hero() {
             hover:scale-110
             hover:bg-white
             hover:text-black
-            md:flex
+            sm:right-3
             lg:right-6
           "
         >
-          <ChevronRight size={22} />
+          <ChevronRight size={20} className="sm:hidden" />
+          <ChevronRight size={22} className="hidden sm:block" />
         </button>
 
         {/* =====================================================
