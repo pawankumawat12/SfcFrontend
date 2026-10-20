@@ -14,7 +14,7 @@ import {
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 
 const DISMISS_KEY = "sfc_pwa_prompt_dismissed_until";
-const DISMISS_COOLDOWN_HOURS = 24;
+const DISMISS_COOLDOWN_HOURS = 1;
 
 export default function PWAInstallPrompt() {
   const {
